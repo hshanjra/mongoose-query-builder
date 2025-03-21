@@ -21,41 +21,38 @@ export class QueryBuilder {
    * @param config Configuration object with entity name and query options
    * @returns Promise resolving to the query results with data and metadata
    */
-  public async graph<D extends Document = any>(
-    config: {
-      entity: string;
-      fields?: QueryOptions["select"];
-      filters?: Record<string, any>;
-      pagination?: QueryOptions["pagination"];
-      sort?: QueryOptions["sort"];
-      expand?: QueryOptions["expand"];
-      fullTextSearch?: QueryOptions["fullTextSearch"];
-      defaultFilters?: Record<string, any>;
-      restrictedFields?: string[];
-      [key: string]: any;
-    }
-  ): Promise<{ data: D[]; metadata: QueryResponse<D>["meta"] }> {
+  public async graph<D extends Document = any>(config: {
+    entity: string;
+    fields?: QueryOptions["select"];
+    filters?: Record<string, any>;
+    pagination?: QueryOptions["pagination"];
+    sort?: QueryOptions["sort"];
+    expand?: QueryOptions["expand"];
+    fullTextSearch?: QueryOptions["fullTextSearch"];
+    defaultFilters?: Record<string, any>;
+    restrictedFields?: string[];
+    [key: string]: any;
+  }): Promise<{ data: D[]; metadata: QueryResponse<D>["meta"] }> {
     const { entity: modelName, ...queryConfig } = config;
 
-    if (!mongoose.models[modelName]) {
-      throw new Error(
-        `Model "${modelName}" not found. Make sure the model is registered with mongoose.`
-      );
+    // Get the model from the connection
+    const model = mongoose.model<D>(modelName);
+
+    if (!model) {
+      throw new Error(`Model "${modelName}" not found. Make sure the model is registered  with mongoose
+      `);
     }
 
-    // Get the model
-    const model = mongoose.model<D>(modelName);
-    
     // Start timing execution
     const startTime = Date.now();
-    
+
     // Build the normalized options
     const options = this.normalizeOptions(queryConfig);
-    
+
     // Build and execute the query
     const query = this.buildQuery(model, options);
     const data = await query.exec();
-    
+
     // Calculate total count for pagination
     let totalCount = 0;
     if (options.pagination) {
@@ -64,14 +61,14 @@ export class QueryBuilder {
     } else {
       totalCount = data.length;
     }
-    
+
     // Calculate pagination metadata
     const { page = 1, limit = 10 } = options.pagination || {};
     const totalPages = Math.ceil(totalCount / limit);
-    
+
     // Calculate execution time
     const executionTimeMs = Date.now() - startTime;
-    
+
     // Return the standardized response
     return {
       data,
@@ -90,7 +87,7 @@ export class QueryBuilder {
           fields: options.selectFields,
           fullTextSearch: options.fullTextSearch,
         },
-      }
+      },
     };
   }
 
@@ -462,7 +459,8 @@ export class QueryBuilder {
             query[fieldName] = value;
           } else {
             // Initialize field object if it doesn't exist
-            query[fieldName] = (query[fieldName] || {}) as FilterQuery<any>[string];
+            query[fieldName] = (query[fieldName] ||
+              {}) as FilterQuery<any>[string];
             const fieldQuery = query[fieldName] as Record<string, any>;
 
             // Handle arrays for operators like $in, $nin
