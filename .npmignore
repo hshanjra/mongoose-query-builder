@@ -1,0 +1,12 @@
+src/mongoose-query-builder/.npmignore
+node_modules
+tests
+src/**/*.test.ts
+src/**/*.spec.ts
+examples
+*.log
+*.tsbuildinfo
+.DS_Store
+npm-debug.log
+yarn-debug.log
+yarn-error.log

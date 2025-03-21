@@ -1,0 +1,46 @@
+{
+  "name": "mongoose-query-builder",
+  "version": "1.0.0",
+  "description": "A query builder for Mongoose that simplifies handling queries with search, filtering, sorting, pagination, population, and field selection.",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "keywords": [
+    "mongoose",
+    "query",
+    "builder",
+    "database",
+    "filtering",
+    "sorting",
+    "pagination"
+  ],
+  "author": "Hanspreet Singh",
+  "license": "MIT",
+  "dependencies": {
+    "mongoose": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/jest": "^29.5.0",
+    "@typescript-eslint/eslint-plugin": "^4.0.0",
+    "@typescript-eslint/parser": "^4.0.0",
+    "express": "^4.21.2",
+    "jest": "^29.5.0",
+    "mongodb-memory-server": "^10.1.4",
+    "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hshanjra/mongoose-query-builder.git"
+  },
+  "homepage": "https://github.com/hshanjra/mongoose-query-builder#readme",
+  "bugs": {
+    "url": "https://github.com/hshanjra/mongoose-query-builder/issues"
+  }
+}
