@@ -1,6 +1,6 @@
 {
   "name": "@hshanjra/mongoose-query-builder",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A query builder for Mongoose that simplifies handling queries with search, filtering, sorting, pagination, population, and field selection.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
