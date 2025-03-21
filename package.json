@@ -1,13 +1,18 @@
 {
-  "name": "mongoose-query-builder",
+  "name": "@hshanjra/mongoose-query-builder",
   "version": "1.0.0",
   "description": "A query builder for Mongoose that simplifies handling queries with search, filtering, sorting, pagination, population, and field selection.",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist/**/*"
+  ],
   "scripts": {
     "build": "tsc",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "mongoose",

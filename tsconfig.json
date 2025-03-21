@@ -2,6 +2,9 @@
   "compilerOptions": {
     "target": "ES6",
     "module": "commonjs",
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -10,5 +13,5 @@
     "rootDir": "./src"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "**/*.spec.ts"]
+  "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts"]
 }
