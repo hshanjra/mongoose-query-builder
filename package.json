@@ -1,6 +1,6 @@
 {
   "name": "@hshanjra/mongoose-query-builder",
-  "version": "1.0.2",
+  "version": "1.0.0",
   "description": "A query builder for Mongoose that simplifies handling queries with search, filtering, sorting, pagination, population, and field selection.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -44,7 +44,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/hshanjra/mongoose-query-builder.git"
+    "url": "git+https://github.com/hshanjra/mongoose-query-builder.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   },
   "homepage": "https://github.com/hshanjra/mongoose-query-builder#readme",
   "bugs": {
