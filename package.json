@@ -46,9 +46,6 @@
     "type": "git",
     "url": "git+https://github.com/hshanjra/mongoose-query-builder.git"
   },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
-  },
   "homepage": "https://github.com/hshanjra/mongoose-query-builder#readme",
   "bugs": {
     "url": "https://github.com/hshanjra/mongoose-query-builder/issues"
