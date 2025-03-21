@@ -98,3 +98,11 @@ export interface QueryOptions {
     };
 }
 
+export interface QueryParams {
+    filters?: Record<string, any>;
+    sort?: string | string[] | Array<{ field: string; order: 'asc' | 'desc' }>;
+    page?: string;
+    limit?: string;
+    fields?: string;
+}
+

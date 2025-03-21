@@ -1,39 +1,51 @@
-import { QueryOptions } from "../types";
-import { isObject } from "./helpers";
+import { isObject } from './helpers';
+import { QueryParams, QueryOptions } from '../types/query-options';
 
 export const buildQueryOptions = (queryParams: QueryParams): QueryOptions => {
+    // Initialize options with default values
     const options: QueryOptions = {
         filters: {},
-        sort: undefined,
-        pagination: {
-            page: 1,
-            limit: 10,
-        },
-        fields: {},
+        sorting: []
     };
 
+    // Handle filters
     if (queryParams.filters && isObject(queryParams.filters)) {
         options.filters = queryParams.filters;
     }
 
+    // Handle sorting
     if (queryParams.sort) {
-        options.sort = queryParams.sort;
+        if (typeof queryParams.sort === 'string') {
+            const [field, order = 'asc'] = queryParams.sort.split(':');
+            options.sorting = [{ field, order: order as 'asc' | 'desc' }];
+        } else if (Array.isArray(queryParams.sort)) {
+            if (typeof queryParams.sort[0] === 'string') {
+                options.sorting = queryParams.sort.map((item) => {
+                    if (typeof item === 'string') {
+                        const [field, order = 'asc'] = item.split(':');
+                        return { field, order: order as 'asc' | 'desc' };
+                    } else {
+                        return item;
+                    }
+                });
+            } else {
+                options.sorting = queryParams.sort as Array<{ field: string; order: 'asc' | 'desc' }>;
+            }
+        }
     }
 
-    if (queryParams.page) {
-        options.pagination.page = parseInt(queryParams.page, 10) || 1;
+    // Handle pagination
+    if (queryParams.page || queryParams.limit) {
+        options.pagination = {
+            page: parseInt(queryParams.page || '1', 10),
+            limit: parseInt(queryParams.limit || '10', 10)
+        };
     }
 
-    if (queryParams.limit) {
-        options.pagination.limit = parseInt(queryParams.limit, 10) || 10;
-    }
-
+    // Handle field selection
     if (queryParams.fields) {
-        options.fields = queryParams.fields.split(',').reduce<Record<string, number>>((acc, field) => {
-            acc[field] = 1;
-            return acc;
-        }, {});
+        options.select = queryParams.fields;
     }
 
     return options;
-};
+}
