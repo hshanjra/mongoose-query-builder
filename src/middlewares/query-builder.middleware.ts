@@ -62,7 +62,7 @@ export const queryBuilderMiddleware = (options: QueryBuilderMiddlewareOptions = 
             const reservedParams = new Set([
                 'select', 'expand', 'sort', 'page', 'limit', 
                 'offset', 'cursor', 'search', 'fields',
-                'language', 'sortByScore'
+                'searchLanguage', 'searchScore'
             ]);
 
             // Handle filters
@@ -72,6 +72,10 @@ export const queryBuilderMiddleware = (options: QueryBuilderMiddlewareOptions = 
                     // Handle array values (e.g., tags_in=tag1,tag2)
                     if (typeof value === 'string' && key.endsWith('_in')) {
                         queryOptions.filters![key] = value.split(',');
+                    } else if (typeof value === 'string') {
+                        // Convert numeric strings to numbers
+                        const numValue = Number(value);
+                        queryOptions.filters![key] = !isNaN(numValue) ? numValue : value;
                     } else {
                         queryOptions.filters![key] = value;
                     }
@@ -98,29 +102,71 @@ export const queryBuilderMiddleware = (options: QueryBuilderMiddlewareOptions = 
 
             // Handle expansion/population
             if (req.query.expand) {
-                const expands = (req.query.expand as string).split(',');
-                queryOptions.expand = expands.map(expand => {
-                    const [path, select] = expand.split('(');
-                    return {
-                        path: path.trim(),
-                        select: select ? select.replace(')', '').split(' ') : undefined
-                    };
-                });
+                const expandStr = req.query.expand as string;
+                const expands: Array<{ path: string; select?: string[] }> = [];
+                let currentPath = '';
+                let buffer = '';
+                let inParentheses = false;
+
+                // Parse character by character to handle nested parentheses
+                for (let i = 0; i < expandStr.length; i++) {
+                    const char = expandStr[i];
+                    if (char === '(' && !inParentheses) {
+                        inParentheses = true;
+                        currentPath = buffer.trim();
+                        buffer = '';
+                    } else if (char === ')' && inParentheses) {
+                        inParentheses = false;
+                        expands.push({
+                            path: currentPath,
+                            select: buffer.split(',').map(s => s.trim())
+                        });
+                        buffer = '';
+                    } else if (char === ',' && !inParentheses) {
+                        if (buffer.trim()) {
+                            expands.push({ path: buffer.trim() });
+                        }
+                        buffer = '';
+                    } else {
+                        buffer += char;
+                    }
+                }
+
+                // Handle last item
+                if (buffer.trim()) {
+                    expands.push({ path: buffer.trim() });
+                }
+
+                queryOptions.expand = expands;
             }
 
             // Handle sorting
             if (req.query.sort) {
                 const sortParam = req.query.sort as string;
-                if (sortParam.includes(',')) {
-                    // Handle multiple sort criteria
-                    queryOptions.sort = sortParam.split(',').map(sort => {
-                        const [field, order = 'asc'] = sort.split(':');
-                        return { field: field.trim(), order: order as 'asc' | 'desc' };
-                    });
-                } else {
-                    // Handle single sort criterion
-                    const [field, order = 'asc'] = sortParam.split(':');
-                    queryOptions.sort = [{ field: field.trim(), order: order as 'asc' | 'desc' }];
+                const validOrders = new Set(['asc', 'desc']);
+                
+                try {
+                    if (sortParam.includes(',')) {
+                        // Handle multiple sort criteria
+                        const sortFields = sortParam.split(',').map(sort => {
+                            const [field, order = 'asc'] = sort.split(':');
+                            return validOrders.has(order.toLowerCase()) ? 
+                                { field: field.trim(), order: order.toLowerCase() as 'asc' | 'desc' } : 
+                                null;
+                        }).filter(Boolean);
+                        
+                        if (sortFields.length > 0) {
+                            queryOptions.sort = sortFields.filter((field): field is { field: string; order: 'asc' | 'desc' } => field !== null);
+                        }
+                    } else {
+                        // Handle single sort criterion
+                        const [field, order = 'asc'] = sortParam.split(':');
+                        if (validOrders.has(order.toLowerCase())) {
+                            queryOptions.sort = [{ field: field.trim(), order: order.toLowerCase() as 'asc' | 'desc' }];
+                        }
+                    }
+                } catch (error) {
+                    // Invalid sort parameter - ignore it
                 }
             }
 
@@ -130,12 +176,10 @@ export const queryBuilderMiddleware = (options: QueryBuilderMiddlewareOptions = 
                 parseInt(req.query.limit as string) || defaultLimit,
                 maxLimit
             );
-            const offset = parseInt(req.query.offset as string);
             
             queryOptions.pagination = {
                 page,
-                limit,
-                ...(offset !== undefined && { offset })
+                limit
             };
 
             // Handle cursor-based pagination
@@ -147,8 +191,8 @@ export const queryBuilderMiddleware = (options: QueryBuilderMiddlewareOptions = 
             if (req.query.search) {
                 queryOptions.fullTextSearch = {
                     searchText: req.query.search as string,
-                    language: req.query.language as string,
-                    sortByScore: req.query.sortByScore === 'true'
+                    ...(req.query.searchLanguage && { language: req.query.searchLanguage as string }),
+                    sortByScore: req.query.searchScore === 'true'
                 };
             }
 
