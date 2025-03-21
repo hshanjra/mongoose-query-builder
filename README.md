@@ -18,7 +18,7 @@ Mongoose Query Builder is a powerful and flexible library little inspired by Gra
 ## Installation
 
 ```bash
-npm install mongoose-query-builder
+npm install @hshanjra/mongoose-query-builder
 ```
 
 ## Basic Usage
