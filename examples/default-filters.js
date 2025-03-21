@@ -63,42 +63,45 @@ async function runExample() {
         ]);
     }
 
+    const queryBuilder = new QueryBuilder();
+
     // Example 1: Using defaultFilters to only show published products
     console.log('\n--- Example 1: Default Filters ---');
-    const publishedProductsQuery = new QueryBuilder(Product, {
+    const { data: publishedProducts } = await queryBuilder.graph({
+        entity: 'Product',
         defaultFilters: { status: 'published' },
-        sort: { price: 'asc' }
+        sort: 'price:asc'
     });
     
-    const publishedProducts = await publishedProductsQuery.buildQuery().exec();
     console.log('Published products (default filter):', 
         publishedProducts.map(p => `${p.name} - $${p.price} (${p.status})`));
 
     // Example 2: User filters combined with default filters
     console.log('\n--- Example 2: Combined Filters ---');
-    const budgetPublishedQuery = new QueryBuilder(Product, {
+    const { data: budgetPublishedProducts } = await queryBuilder.graph({
+        entity: 'Product',
         defaultFilters: { status: 'published' },
-        filters: { price: { $lt: 500 } },
-        sort: { price: 'asc' }
+        filters: { price_lt: 500 },
+        sort: 'price:asc'
     });
     
-    const budgetPublishedProducts = await budgetPublishedQuery.buildQuery().exec();
     console.log('Budget published products (combined filters):', 
         budgetPublishedProducts.map(p => `${p.name} - $${p.price} (${p.status})`));
 
     // Example 3: Admin view (no default filters) to see all products
     console.log('\n--- Example 3: Admin View (No Default Filters) ---');
-    const adminQuery = new QueryBuilder(Product, {
-        sort: { price: 'desc' }
+    const { data: allProducts } = await queryBuilder.graph({
+        entity: 'Product',
+        sort: 'price:desc'
     });
     
-    const allProducts = await adminQuery.buildQuery().exec();
     console.log('All products (admin view):', 
         allProducts.map(p => `${p.name} - $${p.price} (${p.status})`));
 
     // Example 4: Complex filtering with default filters
     console.log('\n--- Example 4: Complex Filtering ---');
-    const complexQuery = new QueryBuilder(Product, {
+    const { data: filteredProducts } = await queryBuilder.graph({
+        entity: 'Product',
         defaultFilters: { status: 'published' },
         filters: { 
             category: 'electronics',
@@ -106,7 +109,6 @@ async function runExample() {
         }
     });
     
-    const filteredProducts = await complexQuery.buildQuery().exec();
     console.log('Filtered products (complex filters):', 
         filteredProducts.map(p => `${p.name} - ${p.tags.join(', ')} (${p.status})`));
 

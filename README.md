@@ -1,196 +1,170 @@
 # Mongoose Query Builder
 
-Mongoose Query Builder is a powerful and flexible library designed to simplify the process of building complex queries in Mongoose. This package provides a global query builder that allows developers to handle queries directly from incoming requests, making it easier to implement search, filtering, sorting, pagination, population, field selection, and more.
+Mongoose Query Builder is a powerful and flexible library little inspired by GraphQL that simplifies complex MongoDB queries in Mongoose. This package provides a clean, intuitive interface for building queries with support for search, filtering, sorting, pagination, population, field selection, and more.
 
 ## Features
 
-- **Search**: Easily implement search functionality with customizable search operators.
-- **Full-Text Search**: Leverage MongoDB's text indices for efficient full-text searching.
-- **Filtering**: Apply various filtering criteria to your queries using built-in filter operators.
-- **Default Filters**: Enforce constraints on all queries (e.g., only show published items).
-- **Sorting**: Sort query results based on specified fields and order.
-- **Pagination**: Handle pagination of query results with ease.
-- **Population**: Populate related documents while managing restricted fields.
-- **Field Selection**: Specify which fields to include or exclude in the results.
-- **Field Removal**: Remove specific fields from the results as needed.
-- **Restricted Fields**: Control which fields can be populated based on your application's requirements.
+- **Dynamic Model Loading**: Use model names directly without importing models
+- **Search**: Full-text search with score sorting and language support
+- **Filtering**: Rich filtering API with comparison and logical operators
+- **Default Filters**: Enforce constraints on all queries (e.g., only show published items)
+- **Sorting**: Simple sorting by single or multiple fields
+- **Pagination**: Built-in pagination with comprehensive metadata
+- **Population**: Populate related documents with field selection
+- **Field Selection**: Control which fields to include/exclude
+- **Field Removal**: Remove specific fields from results
+- **Restricted Fields**: Control which fields can be populated
 
 ## Installation
-
-To install the Mongoose Query Builder, use npm:
 
 ```bash
 npm install mongoose-query-builder
 ```
 
-## Query Lifecycle
+## Basic Usage
 
-Here's how a typical query flows from browser to response using Mongoose Query Builder:
-
-1. **Client Request**: Browser sends a request with URL-encoded query parameters
 ```javascript
-GET /api/posts?status=published&category=tech&sort=createdAt:desc&page=1&limit=10&fields=title,content,author
-```
+const { QueryBuilder } = require('mongoose-query-builder');
 
-2. **Server Processing**: Express middleware parses and transforms URL parameters into QueryBuilder options
-```javascript
-app.get('/api/posts', async (req, res) => {
-    try {
-        // Parse URL parameters into QueryBuilder options
-        const queryOptions = {
-            filters: {
-                status: req.query.status,
-                category: req.query.category
-            },
-            sorting: req.query.sort?.split(',').map(sortItem => {
-                const [field, order] = sortItem.split(':');
-                return { field, order };
-            }),
-            pagination: {
-                page: parseInt(req.query.page) || 1,
-                limit: parseInt(req.query.limit) || 10
-            },
-            selectFields: req.query.fields?.split(',')
-        };
-        
-        const queryBuilder = new QueryBuilder(Post, queryOptions);
-        const response = await queryBuilder.execute();
-        res.json(response);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+// Initialize the query builder
+const query = new QueryBuilder();
+
+// Execute a query
+const { data, metadata } = await query.graph({
+    entity: 'User',                    // Model name
+    fields: ['name', 'email', 'age'],  // Fields to select
+    filters: {
+        age_gte: 18,                   // Filter: age >= 18
+        status: 'active'               // Filter: status === 'active'
+    },
+    pagination: {
+        page: 1,
+        limit: 10
     }
 });
-```
 
-3. **Query Building**: QueryBuilder constructs the MongoDB query
-4. **Execution**: Query is executed and results are processed
-5. **Response**: Standardized response is sent back to client
+console.log('Users:', data);
+console.log('Metadata:', metadata);
+```
 
 ## Query Options
 
-### Filtering Options
+### Configuration Object
+
 ```typescript
-interface QueryOptions {
-    // Regular filters applied based on user input
-    filters?: Record<string, any>;
-    
-    // Default filters that are always applied
-    defaultFilters?: Record<string, any>;
-    
-    // Sorting configuration
-    sorting?: {
+interface QueryConfig {
+    entity: string;                    // Required: Mongoose model name
+    fields?: string[];                 // Optional: Fields to select
+    filters?: Record<string, any>;     // Optional: Query filters
+    pagination?: {
+        page?: number;
+        limit?: number;
+    };
+    sort?: string | string[] | {       // Optional: Sort configuration
         field: string;
         order: 'asc' | 'desc';
     }[];
-    
-    // Pagination settings
-    pagination?: {
-        page: number;
-        limit: number;
-    };
-    
-    // Fields to select (inclusion)
-    selectFields?: string[] | string;
-    
-    // Fields to exclude
-    removeFields?: string[];
-    
-    // Fields that cannot be queried
-    restrictedFields?: string[];
-    
-    // Population configuration
-    populate?: {
+    expand?: {                         // Optional: Population configuration
         path: string;
         select?: string[];
     }[];
-    
-    // Full-text search configuration
-    fullTextSearch?: {
+    fullTextSearch?: {                 // Optional: Full-text search
         searchText: string;
         language?: string;
-        caseSensitive?: boolean;
-        diacriticSensitive?: boolean;
         sortByScore?: boolean;
     };
+    defaultFilters?: Record<string, any>; // Optional: Default filters
+    restrictedFields?: string[];       // Optional: Fields to restrict
 }
 ```
 
 ### Filter Operators
 
-The following operators are supported in filter queries:
+Support for MongoDB-style operators with a simpler syntax:
 
-- **Comparison Operators**
-  - `eq`: Equal to
-  - `ne`: Not equal to
-  - `gt`: Greater than
-  - `gte`: Greater than or equal to
-  - `lt`: Less than
-  - `lte`: Less than or equal to
-  - `in`: Matches any value in array
-  - `nin`: Matches none of the values in array
+- **Comparison**
+  - `_eq`: Equal to (default)
+  - `_ne`: Not equal to
+  - `_gt`: Greater than
+  - `_gte`: Greater than or equal to
+  - `_lt`: Less than
+  - `_lte`: Less than or equal to
+  - `_in`: Matches any value in array
+  - `_nin`: Matches none of the values in array
 
-- **Logical Operators**
-  - `and`: Logical AND
-  - `or`: Logical OR
-  - `not`: Logical NOT
+- **Logical**
+  - `_and`: Logical AND
+  - `_or`: Logical OR
+  - `_not`: Logical NOT
 
-- **Text Search Operators**
-  - `regex`: Regular expression match
-  - `text`: Full-text search
+- **Array**
+  - `_all`: Matches arrays with all elements
+  - `_size`: Matches array size
+  - `_elemMatch`: Matches array elements
 
-Example of using operators:
+Example:
 ```javascript
-const queryBuilder = new QueryBuilder(Product, {
+const { data } = await query.graph({
+    entity: 'Product',
     filters: {
-        price_gte: 100,        // Price >= 100
-        category_in: ['electronics', 'gadgets'],  // Category is either electronics or gadgets
-        name_regex: '^iPhone'  // Name starts with iPhone
+        price_gte: 100,
+        price_lte: 500,
+        category_in: ['electronics', 'gadgets'],
+        tags_all: ['premium', 'wireless']
     }
 });
 ```
 
-## Usage Examples
+### Sorting
 
-### Basic Query with Filtering and Sorting
+Multiple formats supported:
+
 ```javascript
-const { QueryBuilder } = require('mongoose-query-builder');
-
-// Initialize the QueryBuilder with your Mongoose model
-const queryBuilder = new QueryBuilder(YourModel, {
-    filters: { status: 'active', price_gte: 100 },
-    sorting: [{ field: 'createdAt', order: 'desc' }],
-    pagination: { page: 1, limit: 20 },
-    selectFields: ['name', 'price', 'description']
+// String format
+const { data } = await query.graph({
+    entity: 'User',
+    sort: 'age:desc'
 });
 
-// Execute the query
-const results = await queryBuilder.execute();
-```
-
-### Full-Text Search with Field Selection
-```javascript
-// First, create text indices on the fields you want to search
-YourModel.schema.index({ title: 'text', description: 'text' });
-
-const queryBuilder = new QueryBuilder(YourModel, {
-    fullTextSearch: {
-        searchText: 'mongodb text search',
-        sortByScore: true,
-        language: 'english'
-    },
-    selectFields: ['title', 'description', 'score'],
-    pagination: { page: 1, limit: 10 }
+// Array of strings
+const { data } = await query.graph({
+    entity: 'User',
+    sort: ['age:desc', 'name:asc']
 });
 
-const results = await queryBuilder.execute();
+// Object format
+const { data } = await query.graph({
+    entity: 'User',
+    sort: [
+        { field: 'age', order: 'desc' },
+        { field: 'name', order: 'asc' }
+    ]
+});
 ```
 
-### Population with Field Selection
+### Field Selection
+
 ```javascript
-const queryBuilder = new QueryBuilder(Post, {
-    filters: { status: 'published' },
-    populate: [
-        { 
+// Array format
+const { data } = await query.graph({
+    entity: 'User',
+    fields: ['name', 'email', 'age']
+});
+
+// String format (comma-separated)
+const { data } = await query.graph({
+    entity: 'User',
+    fields: 'name,email,age'
+});
+```
+
+### Population (Expanding Relations)
+
+```javascript
+const { data } = await query.graph({
+    entity: 'Post',
+    expand: [
+        {
             path: 'author',
             select: ['name', 'email']
         },
@@ -198,75 +172,82 @@ const queryBuilder = new QueryBuilder(Post, {
             path: 'comments',
             select: ['content', 'createdAt']
         }
-    ],
-    sorting: [
-        { field: 'createdAt', order: 'desc' }
     ]
 });
-
-const results = await queryBuilder.execute();
 ```
 
-### Query Response Format
+### Full-Text Search
+
 ```javascript
-{
-    "data": [/* Array of documents matching the query */],
-    "meta": {
-        "totalCount": 100,
-        "currentPage": 1,
-        "pageSize": 10,
-        "totalPages": 10,
-        "hasNextPage": true,
-        "hasPrevPage": false,
-        "executionTimeMs": 45,
-        "query": {
-            "filters": {/* Applied filters */},
-            "sort": {/* Applied sorting */},
-            "pagination": {/* Pagination settings */},
-            "fields": {/* Selected fields */},
-            "fullTextSearch": {/* Search settings if used */}
-        }
+const { data } = await query.graph({
+    entity: 'Product',
+    fullTextSearch: {
+        searchText: 'wireless headphones',
+        language: 'english',
+        sortByScore: true
+    },
+    filters: {
+        price_lt: 1000
     }
-}
+});
 ```
 
-### Express Middleware Example
+### Express Integration
+
 ```javascript
-const { queryBuilderMiddleware } = require('mongoose-query-builder');
+const express = require('express');
+const { QueryBuilder, queryBuilderMiddleware } = require('mongoose-query-builder');
+
+const app = express();
 
 // Apply middleware to parse query parameters
-app.use(queryBuilderMiddleware);
+app.use(queryBuilderMiddleware({
+    maxLimit: 50,
+    defaultLimit: 20
+}));
 
 app.get('/api/products', async (req, res) => {
     try {
-        const queryBuilder = new QueryBuilder(Product, req.queryBuilder);
-        const response = await queryBuilder.execute();
-        res.json(response);
+        const query = new QueryBuilder();
+        const { data, metadata } = await query.graph({
+            entity: 'Product',
+            ...req.queryOptions
+        });
+        res.json({ data, metadata });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 ```
 
-### Default Filters with Security
-```javascript
-// Enforce visibility rules on all queries
-const queryBuilder = new QueryBuilder(Document, {
-    defaultFilters: { 
-        status: 'published',
-        organizationId: req.user.organizationId // Always scope to user's org
-    },
-    restrictedFields: ['secretKey', 'internalNotes'], // These fields can never be queried
-    filters: req.query.filters // User's filters are combined with default filters
-});
+### Response Format
 
-const results = await queryBuilder.execute();
+```javascript
+{
+    "data": [/* Array of documents matching the query */],
+    "metadata": {
+        "totalCount": 100,        // Total matching documents
+        "currentPage": 1,         // Current page number
+        "pageSize": 10,          // Items per page
+        "totalPages": 10,        // Total number of pages
+        "hasNextPage": true,     // Whether there are more pages
+        "hasPrevPage": false,    // Whether there are previous pages
+        "executionTimeMs": 45,   // Query execution time
+        "query": {               // Original query parameters
+            "filters": {},
+            "sort": {},
+            "pagination": {},
+            "fields": [],
+            "fullTextSearch": {}
+        }
+    }
+}
 ```
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a pull request or open an issue for any enhancements or bug fixes.
+Contributions are welcome! Please feel free to submit a pull request.
 
 ## License
 
-This project is licensed under the MIT License. See the LICENSE file for more details.
+This project is licensed under the MIT License.

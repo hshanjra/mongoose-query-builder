@@ -24,16 +24,16 @@ async function runBasicExample() {
         
         console.log('Connected to MongoDB');
 
-        // Create an instance of QueryBuilder with basic filtering and sorting
-        const queryBuilder = new QueryBuilder(Product, {
-            filters: { price: { $gte: 10 } },
-            sort: { createdAt: 'desc' },
+        // Initialize query builder and execute basic query
+        const queryBuilder = new QueryBuilder();
+        const { data: products } = await queryBuilder.graph({
+            entity: 'Product',
+            filters: { price_gte: 10 },
+            sort: 'createdAt:desc',
             pagination: { page: 1, limit: 10 },
-            fields: 'name description price'
+            fields: ['name', 'description', 'price']
         });
 
-        // Execute the query
-        const products = await queryBuilder.buildQuery().exec();
         console.log('Basic query results:', products);
     } catch (err) {
         console.error('Error in basic example:', err);
@@ -81,34 +81,37 @@ async function runFullTextSearchExample() {
             await Product.collection.createIndex({ name: 'text', description: 'text' });
         }
 
-        // Using QueryBuilder with full-text search
+        const queryBuilder = new QueryBuilder();
+
+        // Using full-text search for "smartphone"
         console.log('Running full-text search for "smartphone"...');
-        const smartphoneQuery = new QueryBuilder(Product, {
+        const { data: smartphones } = await queryBuilder.graph({
+            entity: 'Product',
             fullTextSearch: {
                 searchText: 'smartphone',
                 sortByScore: true
             }
         });
 
-        const smartphones = await smartphoneQuery.buildQuery().exec();
         console.log('Smartphone search results:', smartphones);
 
-        // Another search example with additional filters
+        // Search with additional filters
         console.log('Running full-text search for "electronics" with price filter...');
-        const electronicsQuery = new QueryBuilder(Product, {
-            filters: { price: { $lt: 1000 } },
+        const { data: affordableElectronics } = await queryBuilder.graph({
+            entity: 'Product',
+            filters: { price_lt: 1000 },
             fullTextSearch: {
                 searchText: 'electronics'
             },
-            sort: { price: 'desc' }
+            sort: 'price:desc'
         });
 
-        const affordableElectronics = await electronicsQuery.buildQuery().exec();
         console.log('Affordable electronics search results:', affordableElectronics);
 
-        // Example with language specification
+        // Advanced search with language specification
         console.log('Running advanced search with language specification...');
-        const advancedQuery = new QueryBuilder(Product, {
+        const { data: advancedResults } = await queryBuilder.graph({
+            entity: 'Product',
             fullTextSearch: {
                 searchText: 'headphones noise',
                 language: 'english',
@@ -116,7 +119,6 @@ async function runFullTextSearchExample() {
             }
         });
 
-        const advancedResults = await advancedQuery.buildQuery().exec();
         console.log('Advanced search results:', advancedResults);
     } catch (err) {
         console.error('Error in full-text search example:', err);

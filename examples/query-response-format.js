@@ -1,153 +1,101 @@
 const mongoose = require('mongoose');
 const { QueryBuilder } = require('../lib');
 
-// Example Product Mongoose model
+// Example Product model
 const Product = mongoose.model('Product', new mongoose.Schema({
     name: String,
-    description: String,
     price: Number,
-    status: {
-        type: String,
-        enum: ['draft', 'published', 'archived'],
-        default: 'draft'
-    },
     category: String,
-    tags: [String],
+    description: String,
+    status: String,
     createdAt: { type: Date, default: Date.now }
 }));
 
-async function runExample() {
-    // Connect to MongoDB
-    await mongoose.connect('mongodb://localhost:27017/test', { 
-        useNewUrlParser: true, 
-        useUnifiedTopology: true 
-    });
-    
-    // Create sample data if it doesn't exist
-    const count = await Product.countDocuments();
-    if (count === 0) {
-        console.log('Creating sample products...');
-        await Product.create([
-            { 
-                name: 'Premium Smartphone', 
-                description: 'Latest smartphone with advanced features', 
-                price: 999,
-                status: 'published',
+async function demonstrateResponseFormats() {
+    try {
+        await mongoose.connect('mongodb://localhost:27017/test', {
+            useNewUrlParser: true,
+            useUnifiedTopology: true
+        });
+
+        const query = new QueryBuilder();
+
+        // Example 1: Basic query response
+        console.log('\n--- Example 1: Basic Query Response ---');
+        const basicResponse = await query.graph({
+            entity: 'Product',
+            fields: ['name', 'price'],
+            sort: 'price:desc',
+            pagination: { page: 1, limit: 2 }
+        });
+
+        console.log('Basic Response Structure:');
+        console.log(JSON.stringify(basicResponse, null, 2));
+
+        // Example 2: Response with filters and full-text search
+        console.log('\n--- Example 2: Response with Search and Filters ---');
+        const searchResponse = await query.graph({
+            entity: 'Product',
+            filters: {
                 category: 'electronics',
-                tags: ['phone', 'gadget', 'premium']
+                price_gte: 100
             },
-            { 
-                name: 'Budget Smartphone', 
-                description: 'Affordable smartphone for basic needs', 
-                price: 299,
-                status: 'published',
-                category: 'electronics',
-                tags: ['phone', 'budget']
+            fullTextSearch: {
+                searchText: 'wireless',
+                sortByScore: true
             },
-            { 
-                name: 'Gaming Laptop', 
-                description: 'High-performance laptop for gaming enthusiasts', 
-                price: 1499,
-                status: 'published',
-                category: 'electronics',
-                tags: ['laptop', 'gaming', 'premium']
-            },
-            { 
-                name: 'Bluetooth Headphones', 
-                description: 'Wireless headphones with noise cancellation', 
-                price: 199,
-                status: 'published',
-                category: 'audio',
-                tags: ['headphones', 'wireless', 'budget']
-            },
-            { 
-                name: 'Upcoming Tablet', 
-                description: 'Next generation tablet coming soon', 
-                price: 599,
-                status: 'draft',
-                category: 'electronics',
-                tags: ['tablet', 'gadget']
-            },
-            { 
-                name: 'Discontinued Laptop', 
-                description: 'Old model laptop no longer available', 
-                price: 899,
-                status: 'archived',
-                category: 'electronics',
-                tags: ['laptop', 'computer']
+            pagination: { page: 1, limit: 5 }
+        });
+
+        console.log('Search Response Structure:');
+        console.log(JSON.stringify(searchResponse, null, 2));
+
+        // Example 3: Response with relationships
+        console.log('\n--- Example 3: Response with Relationships ---');
+        const relationalResponse = await query.graph({
+            entity: 'Product',
+            expand: [
+                { path: 'category', select: ['name'] },
+                { path: 'reviews', select: ['rating', 'comment'] }
+            ],
+            pagination: { page: 1, limit: 3 }
+        });
+
+        console.log('Relational Response Structure:');
+        console.log(JSON.stringify(relationalResponse, null, 2));
+
+        // Example 4: Analytics response
+        console.log('\n--- Example 4: Analytics Response ---');
+        const analyticsResponse = await query.graph({
+            entity: 'Product',
+            filters: {
+                createdAt_gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
+                status: 'active'
             }
-        ]);
-    }
-
-    // Demo the standardized query response format
-    console.log('\n--- Query Response Format Demo ---');
-    const productsQuery = new QueryBuilder(Product, {
-        defaultFilters: { status: 'published' },
-        filters: { 
-            price_gte: 200,
-            category: 'electronics'
-        },
-        pagination: {
-            page: 1,
-            limit: 2
-        },
-        sort: { price: 'asc' }
-    });
-    
-    // Use the new execute method to get the standardized response
-    const response = await productsQuery.execute();
-    
-    // Log the full response structure
-    console.log('Standard Query Response Structure:');
-    console.log(JSON.stringify({
-        data: '[Array of product documents]',
-        meta: response.meta
-    }, null, 2));
-    
-    // Display the actual data
-    console.log('\nPage 1 results:');
-    response.data.forEach(product => {
-        console.log(`- ${product.name} ($${product.price})`);
-    });
-    
-    // Demonstrate pagination by fetching the second page
-    if (response.meta.hasNextPage) {
-        console.log('\nFetching page 2...');
-        
-        const page2Query = new QueryBuilder(Product, {
-            defaultFilters: { status: 'published' },
-            filters: { 
-                price_gte: 200,
-                category: 'electronics'
-            },
-            pagination: {
-                page: 2,
-                limit: 2
-            },
-            sort: { price: 'asc' }
         });
-        
-        const page2Response = await page2Query.execute();
-        
-        console.log('Page 2 results:');
-        page2Response.data.forEach(product => {
-            console.log(`- ${product.name} ($${product.price})`);
-        });
-        
-        // Show pagination metadata
-        console.log('\nPagination metadata:');
-        console.log(`- Total items: ${page2Response.meta.totalCount}`);
-        console.log(`- Total pages: ${page2Response.meta.totalPages}`);
-        console.log(`- Current page: ${page2Response.meta.currentPage}`);
-        console.log(`- Items per page: ${page2Response.meta.pageSize}`);
-    }
-    
-    // Demonstrate execution time tracking
-    console.log('\nPerformance metrics:');
-    console.log(`- Query execution time: ${response.meta.executionTimeMs}ms`);
 
-    // Close the connection
-    await mongoose.connection.close();
+        // Process analytics from the response
+        const analytics = {
+            totalProducts: analyticsResponse.metadata.totalCount,
+            averagePrice: analyticsResponse.data.reduce((sum, product) => sum + product.price, 0) / analyticsResponse.data.length,
+            categoryBreakdown: analyticsResponse.data.reduce((acc, product) => {
+                acc[product.category] = (acc[product.category] || 0) + 1;
+                return acc;
+            }, {})
+        };
+
+        console.log('Analytics Response:');
+        console.log(JSON.stringify({
+            ...analyticsResponse,
+            analytics
+        }, null, 2));
+
+    } catch (error) {
+        console.error('Error:', error);
+    } finally {
+        await mongoose.disconnect();
+    }
 }
 
-runExample().catch(err => console.error(err));
+// Run the demonstration
+demonstrateResponseFormats().catch(console.error);

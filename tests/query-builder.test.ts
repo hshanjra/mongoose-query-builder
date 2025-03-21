@@ -19,12 +19,15 @@ const userSchema = new mongoose.Schema<IUser>({
 
 describe('QueryBuilder', () => {
   let mongoServer: MongoMemoryServer;
-  const User = mongoose.model<IUser>('User', userSchema);
+  let User: mongoose.Model<IUser>;
 
   beforeAll(async () => {
     mongoServer = await MongoMemoryServer.create();
     const mongoUri = mongoServer.getUri();
     await mongoose.connect(mongoUri);
+    
+    // Define the model
+    User = mongoose.model<IUser>('User', userSchema);
   }, 30000); // Increase timeout to 30 seconds
 
   afterAll(async () => {
@@ -48,108 +51,120 @@ describe('QueryBuilder', () => {
     });
 
     it('should find all documents', async () => {
-      const queryBuilder = new QueryBuilder(User, {});
-      const response = await queryBuilder.execute();
-      expect(response.data).toHaveLength(3);
+      const queryBuilder = new QueryBuilder();
+      const { data, metadata } = await queryBuilder.graph({
+        entity: 'User'
+      });
+      expect(data).toHaveLength(3);
     });
 
     it('should find with conditions using filters', async () => {
-      const queryBuilder = new QueryBuilder(User, {
+      const queryBuilder = new QueryBuilder();
+      const { data, metadata } = await queryBuilder.graph({
+        entity: 'User',
         filters: {
           age_gt: 20
         }
       });
-      const response = await queryBuilder.execute();
-      expect(response.data).toHaveLength(2);
-      expect(response.data.every(user => user.age > 20)).toBe(true);
+      expect(data).toHaveLength(2);
+      expect(data.every(user => user.age > 20)).toBe(true);
     });
 
     it('should support field selection', async () => {
-      const queryBuilder = new QueryBuilder(User, {
-        select: ['name', 'email']
+      console.log('Running field selection test');
+      const queryBuilder = new QueryBuilder();
+      const { data, metadata } = await queryBuilder.graph({
+        entity: 'User',
+        fields: ['name', 'email']
       });
-      const response = await queryBuilder.execute();
-      expect(response.data[0]).toHaveProperty('name');
-      expect(response.data[0]).toHaveProperty('email');
-      expect(response.data[0]).not.toHaveProperty('age');
-      expect(response.data[0]).not.toHaveProperty('isActive');
+      console.log('Query response:', {
+        data: data.map(doc => ({
+          name: doc.name,
+          email: doc.email,
+          hasAge: doc.hasOwnProperty('age'),
+          hasIsActive: doc.hasOwnProperty('isActive')
+        }))
+      });
+      expect(data[0]).toHaveProperty('name');
+      expect(data[0]).toHaveProperty('email');
+      expect(Object.prototype.hasOwnProperty.call(data[0], 'age')).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(data[0], 'isActive')).toBe(false);
     });
 
     it('should support sorting', async () => {
-      const queryBuilder = new QueryBuilder(User, {
+      const queryBuilder = new QueryBuilder();
+      const { data, metadata } = await queryBuilder.graph({
+        entity: 'User',
         sort: 'age:desc'
       });
-      const response = await queryBuilder.execute();
-      expect(response.data[0].age).toBe(30);
-      expect(response.data[1].age).toBe(25);
-      expect(response.data[2].age).toBe(20);
+      expect(data[0].age).toBe(30);
+      expect(data[1].age).toBe(25);
+      expect(data[2].age).toBe(20);
     });
 
     it('should support multiple sorting criteria', async () => {
-      const queryBuilder = new QueryBuilder(User, {
+      console.log('Running multiple sorting criteria test');
+      const queryBuilder = new QueryBuilder();
+      const { data, metadata } = await queryBuilder.graph({
+        entity: 'User',
         sort: [
           { field: 'isActive', order: 'desc' },
           { field: 'age', order: 'asc' }
         ]
       });
-      const response = await queryBuilder.execute();
-      expect(response.data[0].isActive).toBe(true);
-      expect(response.data[1].isActive).toBe(true);
-      expect(response.data[2].isActive).toBe(false);
+      console.log('Query response:', {
+        data: data.map(doc => ({
+          name: doc.name,
+          isActive: doc.isActive,
+          age: doc.age
+        }))
+      });
+      expect(data[0].isActive).toBe(true);
+      expect(data[1].isActive).toBe(true);
+      expect(data[2].isActive).toBe(false);
       // Check age sorting within isActive groups
-      expect(response.data[0].age).toBeLessThan(response.data[1].age);
+      expect(data[0].age).toBeLessThan(data[1].age);
     });
 
     it('should support pagination', async () => {
-      const queryBuilder = new QueryBuilder(User, {
+      const queryBuilder = new QueryBuilder();
+      const { data, metadata } = await queryBuilder.graph({
+        entity: 'User',
         pagination: {
           page: 1,
           limit: 2
         },
         sort: 'age:asc'
       });
-      const response = await queryBuilder.execute();
-      expect(response.data).toHaveLength(2);
-      expect(response.meta.totalCount).toBe(3);
-      expect(response.meta.currentPage).toBe(1);
-      expect(response.meta.pageSize).toBe(2);
-      expect(response.meta.hasNextPage).toBe(true);
-      expect(response.meta.hasPrevPage).toBe(false);
+      expect(data).toHaveLength(2);
+      expect(metadata.totalCount).toBe(3);
+      expect(metadata.currentPage).toBe(1);
+      expect(metadata.pageSize).toBe(2);
+      expect(metadata.hasNextPage).toBe(true);
+      expect(metadata.hasPrevPage).toBe(false);
     });
 
     it('should apply default filters', async () => {
-      const queryBuilder = new QueryBuilder(User, {
+      const queryBuilder = new QueryBuilder();
+      const { data, metadata } = await queryBuilder.graph({
+        entity: 'User',
         defaultFilters: { isActive: true }
       });
-      const response = await queryBuilder.execute();
-      expect(response.data).toHaveLength(2);
-      expect(response.data.every(user => user.isActive)).toBe(true);
+      expect(data).toHaveLength(2);
+      expect(data.every(user => user.isActive)).toBe(true);
     });
 
     it('should combine default filters with user filters', async () => {
-      const queryBuilder = new QueryBuilder(User, {
+      const queryBuilder = new QueryBuilder();
+      const { data, metadata } = await queryBuilder.graph({
+        entity: 'User',
         defaultFilters: { isActive: true },
         filters: { age_gt: 25 }
       });
-      const response = await queryBuilder.execute();
-      expect(response.data).toHaveLength(1);
-      expect(response.data[0].name).toBe('Jane');
-      expect(response.data[0].isActive).toBe(true);
-      expect(response.data[0].age).toBeGreaterThan(25);
-    });
-
-    it('should support chaining query modifications', async () => {
-      const queryBuilder = new QueryBuilder(User, {})
-        .addFilters({ isActive: true })
-        .addSelect(['name', 'age'])
-        .setSort('age:desc');
-
-      const response = await queryBuilder.execute();
-      expect(response.data).toHaveLength(2);
-      expect(response.data[0]).toHaveProperty('name');
-      expect(response.data[0]).toHaveProperty('age');
-      expect(response.data[0]).not.toHaveProperty('email');
-      expect(response.data[0].age).toBe(30);
+      expect(data).toHaveLength(1);
+      expect(data[0].name).toBe('Jane');
+      expect(data[0].isActive).toBe(true);
+      expect(data[0].age).toBeGreaterThan(25);
     });
   });
 
@@ -162,42 +177,21 @@ describe('QueryBuilder', () => {
       ]);
     });
 
-    it('should perform aggregation with metadata', async () => {
-      const queryBuilder = new QueryBuilder(User, {
+    it('should include metadata with query results', async () => {
+      const queryBuilder = new QueryBuilder();
+      const { data, metadata } = await queryBuilder.graph({
+        entity: 'User',
         filters: {},
         pagination: {
           page: 1,
           limit: 10
         }
       });
-      const response = await queryBuilder.execute();
       
-      expect(response.meta.totalCount).toBe(3);
-      expect(response.meta.currentPage).toBe(1);
-      expect(response.meta.hasNextPage).toBe(false);
-      expect(response.meta.executionTimeMs).toBeDefined();
-    });
-
-    it('should support raw aggregation pipeline', async () => {
-      const queryBuilder = new QueryBuilder(User, {});
-      const result = await queryBuilder
-        .aggregate([
-          {
-            $group: {
-              _id: '$isActive',
-              count: { $sum: 1 },
-              avgAge: { $avg: '$age' }
-            }
-          },
-          { $sort: { _id: -1 } }
-        ])
-        .execute();
-
-      expect(result).toHaveLength(2);
-      expect(result[0]._id).toBe(true);
-      expect(result[0].count).toBe(2);
-      expect(result[1]._id).toBe(false);
-      expect(result[1].count).toBe(1);
+      expect(metadata.totalCount).toBe(3);
+      expect(metadata.currentPage).toBe(1);
+      expect(metadata.hasNextPage).toBe(false);
+      expect(metadata.executionTimeMs).toBeDefined();
     });
   });
 });

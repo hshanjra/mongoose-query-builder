@@ -56,18 +56,21 @@ app.use('/api', queryBuilderMiddleware({
 // Example 1: Basic product listing with direct browser query support
 app.get('/api/products', async (req, res) => {
     try {
-        const queryBuilder = new QueryBuilder(Product, req.queryOptions);
+        const queryBuilder = new QueryBuilder();
+        const { data, metadata } = await queryBuilder.graph({
+            entity: 'Product',
+            defaultFilters: { status: 'active' },
+            filters: req.query.onSale ? {
+                ...req.queryOptions.filters,
+                'price_lt': req.query.originalPrice
+            } : req.queryOptions.filters,
+            fields: req.queryOptions.fields,
+            sort: req.queryOptions.sort,
+            pagination: req.queryOptions.pagination,
+            expand: req.queryOptions.expand
+        });
 
-        // Add default filters for security
-        queryBuilder.addFilters({ status: 'active' });
-
-        // Example: Add business logic based filters
-        if (req.query.onSale) {
-            queryBuilder.addFilters({ 'price_lt': req.query.originalPrice });
-        }
-
-        const response = await queryBuilder.execute();
-        res.json(response);
+        res.json({ data, metadata });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -76,40 +79,44 @@ app.get('/api/products', async (req, res) => {
 // Example 2: Advanced product search with multiple modifications
 app.get('/api/products/search', async (req, res) => {
     try {
-        const queryBuilder = new QueryBuilder(Product, req.queryOptions);
+        const queryBuilder = new QueryBuilder();
+        
+        // Build the search configuration
+        const searchConfig = {
+            entity: 'Product',
+            filters: req.queryOptions.filters || {},
+            fields: req.queryOptions.fields,
+            sort: req.queryOptions.sort,
+            pagination: req.queryOptions.pagination,
+            expand: req.queryOptions.expand
+        };
 
         // Add text search if provided
         if (req.query.keyword) {
-            queryBuilder.addFilters({ 
-                $text: { $search: req.query.keyword } 
-            });
+            searchConfig.fullTextSearch = {
+                searchText: req.query.keyword,
+                sortByScore: true
+            };
         }
 
         // Add price range filter
         if (req.query.minPrice || req.query.maxPrice) {
-            const priceFilter = {};
-            if (req.query.minPrice) priceFilter.price_gte = req.query.minPrice;
-            if (req.query.maxPrice) priceFilter.price_lte = req.query.maxPrice;
-            queryBuilder.addFilters(priceFilter);
+            searchConfig.filters = {
+                ...searchConfig.filters,
+                ...(req.query.minPrice && { price_gte: req.query.minPrice }),
+                ...(req.query.maxPrice && { price_lte: req.query.maxPrice })
+            };
         }
 
-        // Add category filter with subcategories support
-        if (req.query.category) {
-            const categories = await getCategoryWithChildren(req.query.category);
-            queryBuilder.addFilters({ category_in: categories });
-        }
+        // Add stock check
+        searchConfig.filters = {
+            ...searchConfig.filters,
+            stock_gt: 0
+        };
 
-        // Modify query for inventory check
-        queryBuilder.modify(query => {
-            query.where('stock').gt(0);
-        });
-
-        // Add seller info but protect sensitive data
-        queryBuilder.addExpand('seller');
-        queryBuilder.addSelect(['name', 'price', 'description', 'seller.name', 'seller.rating']);
-
-        const response = await queryBuilder.execute();
-        res.json(response);
+        // Execute the query
+        const { data, metadata } = await queryBuilder.graph(searchConfig);
+        res.json({ data, metadata });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -118,44 +125,51 @@ app.get('/api/products/search', async (req, res) => {
 // Example 3: Product analytics with aggregation
 app.get('/api/products/analytics', async (req, res) => {
     try {
-        const queryBuilder = new QueryBuilder(Product, req.queryOptions);
+        const queryBuilder = new QueryBuilder();
+        
+        // Build analytics configuration
+        const analyticsConfig = {
+            entity: 'Product',
+            filters: {
+                ...(req.query.startDate && req.query.endDate && {
+                    createdAt_gte: new Date(req.query.startDate),
+                    createdAt_lte: new Date(req.query.endDate)
+                }),
+                ...req.queryOptions.filters
+            }
+        };
 
-        // Add date range filter
-        if (req.query.startDate && req.query.endDate) {
-            queryBuilder.addFilters({
-                createdAt_gte: new Date(req.query.startDate),
-                createdAt_lte: new Date(req.query.endDate)
-            });
-        }
+        // Execute the query
+        const { data, metadata } = await queryBuilder.graph(analyticsConfig);
 
-        // Use raw aggregation for complex analytics
-        const analyticsResults = await queryBuilder
-            .aggregate([
-                { $match: queryBuilder.buildQuery().getQuery() },
-                {
-                    $group: {
-                        _id: '$category',
-                        totalProducts: { $sum: 1 },
-                        averagePrice: { $avg: '$price' },
-                        totalStock: { $sum: '$stock' },
-                        productsWithLowStock: {
-                            $sum: { $cond: [{ $lt: ['$stock', 10] }, 1, 0] }
-                        }
-                    }
-                },
-                { $sort: { totalProducts: -1 } }
-            ])
-            .execute();
+        // Process the results for analytics
+        const analytics = {
+            totalProducts: data.length,
+            categorySummary: data.reduce((acc, product) => {
+                acc[product.category] = acc[product.category] || {
+                    count: 0,
+                    totalStock: 0,
+                    averagePrice: 0
+                };
+                acc[product.category].count++;
+                acc[product.category].totalStock += product.stock;
+                acc[product.category].averagePrice = 
+                    (acc[product.category].averagePrice * (acc[product.category].count - 1) + product.price) / 
+                    acc[product.category].count;
+                return acc;
+            }, {}),
+            lowStockProducts: data.filter(p => p.stock < 10).length
+        };
 
-        res.json(analyticsResults);
+        res.json({ analytics, metadata });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Example browser URLs:
-
 /*
+Example browser URLs:
+
 1. Basic listing with filtering and sorting:
 /api/products?
     category=electronics&
@@ -171,7 +185,7 @@ app.get('/api/products/analytics', async (req, res) => {
     keyword=smartphone&
     minPrice=200&
     maxPrice=800&
-    select=name,price,description&
+    fields=name,price,description&
     expand=seller&
     sort=rating:desc,price:asc
 

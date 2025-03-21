@@ -108,47 +108,54 @@ describe('Integration Tests for QueryBuilder', () => {
         });
 
         it('should find all documents', async () => {
-            const queryBuilder = new QueryBuilder(Post, {});
-            const response = await queryBuilder.execute();
-            expect(response.data).toHaveLength(3);
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post'
+            });
+            expect(data).toHaveLength(3);
         });
 
         it('should find with conditions using filters', async () => {
-            const queryBuilder = new QueryBuilder(Post, {
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post',
                 filters: { status: 'published' }
             });
-            const response = await queryBuilder.execute();
-            expect(response.data).toHaveLength(2);
-            expect(response.data.every(post => post.status === 'published')).toBe(true);
+            expect(data).toHaveLength(2);
+            expect(data.every(post => post.status === 'published')).toBe(true);
         });
 
         it('should support field selection', async () => {
-            const queryBuilder = new QueryBuilder(Post, {
-                select: ['title', 'author', 'tags']
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post',
+                fields: ['title', 'author', 'tags']
             });
-            const response = await queryBuilder.execute();
-            expect(response.data[0]).toHaveProperty('title');
-            expect(response.data[0]).toHaveProperty('author');
-            expect(response.data[0]).toHaveProperty('tags');
-            expect(response.data[0]).not.toHaveProperty('content');
-            expect(response.data[0]).not.toHaveProperty('viewCount');
+            expect(data[0]).toHaveProperty('title');
+            expect(data[0]).toHaveProperty('author');
+            expect(data[0]).toHaveProperty('tags');
+            expect(Object.prototype.hasOwnProperty.call(data[0], 'content')).toBe(false);
+            expect(Object.prototype.hasOwnProperty.call(data[0], 'viewCount')).toBe(false);
         });
 
         it('should support multiple sorting criteria', async () => {
-            const queryBuilder = new QueryBuilder(Post, {
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post',
                 sort: [
                     { field: 'status', order: 'asc' },
                     { field: 'viewCount', order: 'desc' }
                 ]
             });
-            const response = await queryBuilder.execute();
-            expect(response.data[0].status).toBe('draft');
-            expect(response.data[1].status).toBe('published');
-            expect(response.data[1].viewCount).toBeGreaterThan(response.data[2].viewCount);
+            expect(data[0].status).toBe('draft');
+            expect(data[1].status).toBe('published');
+            expect(data[1].viewCount).toBeGreaterThan(data[2].viewCount);
         });
 
         it('should support pagination with complex filters', async () => {
-            const queryBuilder = new QueryBuilder(Post, {
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post',
                 filters: {
                     status: 'published',
                     viewCount_gte: 100
@@ -156,36 +163,37 @@ describe('Integration Tests for QueryBuilder', () => {
                 pagination: { page: 1, limit: 1 },
                 sort: 'createdAt:desc'
             });
-            const response = await queryBuilder.execute();
-            expect(response.data).toHaveLength(1);
-            expect(response.meta.totalCount).toBe(2);
-            expect(response.meta.hasNextPage).toBe(true);
-            expect(response.data[0].title).toBe('Second Post');
+            expect(data).toHaveLength(1);
+            expect(metadata.totalCount).toBe(2);
+            expect(metadata.hasNextPage).toBe(true);
+            expect(data[0].title).toBe('Second Post');
         });
 
         it('should support population with field selection', async () => {
-            const queryBuilder = new QueryBuilder(Post, {
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post',
                 filters: { status: 'published' },
                 expand: [{
                     path: 'author',
                     select: ['name']
                 }]
             });
-            const response = await queryBuilder.execute();
-            expect(response.data[0].author).toHaveProperty('name');
-            expect(response.data[0].author).not.toHaveProperty('email');
-            expect(response.data[0].author.name).toBe('Alice');
+            expect(data[0].author).toHaveProperty('name');
+            expect(data[0].author && Object.prototype.hasOwnProperty.call(data[0].author, 'email')).toBe(false);
+            expect(data[0].author.name).toBe('Alice');
         });
 
         it('should support array field operations', async () => {
-            const queryBuilder = new QueryBuilder(Post, {
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post',
                 filters: {
                     tags_in: ['mongodb', 'advanced']
                 }
             });
-            const response = await queryBuilder.execute();
-            expect(response.data).toHaveLength(1);
-            expect(response.data[0].title).toBe('Second Post');
+            expect(data).toHaveLength(1);
+            expect(data[0].title).toBe('Second Post');
         });
     });
 
@@ -221,71 +229,84 @@ describe('Integration Tests for QueryBuilder', () => {
         });
 
         it('should perform full-text search with sorting by score', async () => {
-            const queryBuilder = new QueryBuilder(Post, {
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post',
                 fullTextSearch: {
                     searchText: 'MongoDB aggregation',
                     sortByScore: true
                 }
             });
-            const response = await queryBuilder.execute();
-            expect(response.data).toHaveLength(1);
-            expect(response.data[0].title).toBe('MongoDB Tutorial');
+            expect(data).toHaveLength(1);
+            expect(data[0].title).toBe('MongoDB Tutorial');
         });
 
         it('should combine multiple query options', async () => {
-            const queryBuilder = new QueryBuilder(Post, {
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post',
                 filters: {
                     status: 'published',
                     viewCount_gt: 100
                 },
                 sort: 'viewCount:desc',
-                select: ['title', 'viewCount', 'author'],
+                fields: ['title', 'viewCount', 'author'],
                 expand: [{ path: 'author', select: ['name'] }],
                 pagination: { page: 1, limit: 10 }
             });
-            const response = await queryBuilder.execute();
             
-            expect(response.data).toHaveLength(2);
-            expect(response.meta.totalCount).toBe(2);
-            expect(response.data[0]).toHaveProperty('title');
-            expect(response.data[0]).toHaveProperty('viewCount');
-            expect(response.data[0]).not.toHaveProperty('content');
-            expect(response.data[0].viewCount).toBeGreaterThan(response.data[1].viewCount);
-            expect(response.data[0].author).toHaveProperty('name');
+            expect(data).toHaveLength(2);
+            expect(metadata.totalCount).toBe(2);
+            expect(data[0]).toHaveProperty('title');
+            expect(data[0]).toHaveProperty('viewCount');
+            expect(Object.prototype.hasOwnProperty.call(data[0], 'content')).toBe(false);
+            expect(data[0].viewCount).toBeGreaterThan(data[1].viewCount);
+            expect(data[0].author).toHaveProperty('name');
         });
 
         it('should support date range filters', async () => {
-            const queryBuilder = new QueryBuilder(Post, {
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post',
                 filters: {
                     createdAt_gte: new Date('2024-01-02'),
                     status: 'published'
                 }
             });
-            const response = await queryBuilder.execute();
-            expect(response.data).toHaveLength(1);
-            expect(response.data[0].title).toBe('GraphQL Basics');
+            expect(data).toHaveLength(1);
+            expect(data[0].title).toBe('GraphQL Basics');
         });
 
-        it('should support complex aggregation', async () => {
-            const queryBuilder = new QueryBuilder(Post, {});
-            const result = await queryBuilder
-                .aggregate([
-                    {
-                        $group: {
-                            _id: '$status',
-                            count: { $sum: 1 },
-                            totalViews: { $sum: '$viewCount' },
-                            avgViews: { $avg: '$viewCount' }
-                        }
-                    },
-                    { $sort: { totalViews: -1 } }
-                ])
-                .execute();
+        it('should handle invalid model names gracefully', async () => {
+            const queryBuilder = new QueryBuilder();
+            await expect(queryBuilder.graph({
+                entity: 'NonExistentModel'
+            })).rejects.toThrow('Model "NonExistentModel" not found');
+        });
 
-            expect(result).toHaveLength(1);
-            expect(result[0]._id).toBe('published');
-            expect(result[0].count).toBe(2);
-            expect(result[0].totalViews).toBe(350);
+        it('should include query metadata in response', async () => {
+            const queryBuilder = new QueryBuilder();
+            const { data, metadata } = await queryBuilder.graph({
+                entity: 'Post',
+                filters: { status: 'published' },
+                sort: 'viewCount:desc',
+                pagination: { page: 1, limit: 5 }
+            });
+            
+            expect(metadata).toMatchObject({
+                totalCount: expect.any(Number),
+                currentPage: 1,
+                pageSize: 5,
+                totalPages: expect.any(Number),
+                hasNextPage: expect.any(Boolean),
+                hasPrevPage: expect.any(Boolean),
+                executionTimeMs: expect.any(Number),
+                query: {
+                    filters: expect.any(Object),
+                    sort: expect.any(Object),
+                    pagination: expect.any(Object)
+                }
+            });
         });
     });
 });

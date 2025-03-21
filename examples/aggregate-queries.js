@@ -1,184 +1,138 @@
 const mongoose = require('mongoose');
 const { QueryBuilder } = require('../lib');
 
-// Define sample schema
+// Example Order model
 const orderSchema = new mongoose.Schema({
     orderId: String,
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    customerId: String,
     products: [{
-        productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
+        productId: String,
+        name: String,
         quantity: Number,
         price: Number
     }],
-    status: {
-        type: String,
-        enum: ['pending', 'processing', 'shipped', 'delivered'],
-        default: 'pending'
-    },
+    status: String,
     totalAmount: Number,
     createdAt: { type: Date, default: Date.now }
 });
 
 const Order = mongoose.model('Order', orderSchema);
 
-async function runAggregationExamples() {
+async function demonstrateAggregateQueries() {
     try {
-        await mongoose.connect('mongodb://localhost:27017/ecommerce', {
+        await mongoose.connect('mongodb://localhost:27017/test', {
             useNewUrlParser: true,
             useUnifiedTopology: true
         });
 
-        // Example 1: Basic aggregation with filtering and grouping
-        console.log('\nExample 1: Orders by status with total revenue');
-        const orderStats = new QueryBuilder(Order, {
+        const query = new QueryBuilder();
+
+        // Example 1: Sales Analytics by Date Range
+        console.log('\n--- Example 1: Sales Analytics by Date Range ---');
+        const salesAnalytics = await query.graph({
+            entity: 'Order',
             filters: {
-                createdAt_gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
-            }
-        });
-        
-        const orderResults = await orderStats
-            .aggregate([
-                {
-                    $group: {
-                        _id: '$status',
-                        count: { $sum: 1 },
-                        revenue: { $sum: '$totalAmount' }
-                    }
-                },
-                {
-                    $sort: { revenue: -1 }
-                }
-            ])
-            .execute();
-
-        console.log('Order statistics:', orderResults);
-
-        // Example 2: Complex aggregation with multiple stages
-        console.log('\nExample 2: Product sales analysis');
-        const productAnalysis = new QueryBuilder(Order, {
-            filters: { status: 'delivered' }
-        });
-
-        const productResults = await productAnalysis
-            .aggregate([
-                { $unwind: '$products' },
-                {
-                    $group: {
-                        _id: '$products.productId',
-                        totalSold: { $sum: '$products.quantity' },
-                        totalRevenue: { 
-                            $sum: { 
-                                $multiply: ['$products.quantity', '$products.price'] 
-                            }
-                        },
-                        averageOrderValue: { $avg: '$products.price' }
-                    }
-                },
-                {
-                    $sort: { totalRevenue: -1 }
-                },
-                {
-                    $limit: 10
-                }
-            ])
-            .execute();
-
-        console.log('Top 10 products by revenue:', productResults);
-
-        // Example 3: Time-based analysis with date grouping
-        console.log('\nExample 3: Daily sales trend');
-        const salesTrend = new QueryBuilder(Order, {
-            filters: {
-                createdAt_gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // Last 7 days
+                createdAt_gte: new Date('2024-01-01'),
+                createdAt_lte: new Date('2024-12-31'),
+                status: 'completed'
             }
         });
 
-        const trendResults = await salesTrend
-            .aggregate([
-                {
-                    $group: {
-                        _id: {
-                            year: { $year: '$createdAt' },
-                            month: { $month: '$createdAt' },
-                            day: { $dayOfMonth: '$createdAt' }
-                        },
-                        orders: { $sum: 1 },
-                        revenue: { $sum: '$totalAmount' },
-                        averageOrderValue: { $avg: '$totalAmount' }
-                    }
-                },
-                {
-                    $sort: { 
-                        '_id.year': 1, 
-                        '_id.month': 1, 
-                        '_id.day': 1 
-                    }
-                },
-                {
-                    $project: {
-                        _id: 0,
-                        date: {
-                            $dateFromParts: {
-                                year: '$_id.year',
-                                month: '$_id.month',
-                                day: '$_id.day'
-                            }
-                        },
-                        orders: 1,
-                        revenue: 1,
-                        averageOrderValue: 1
-                    }
+        // Process sales data
+        const monthlySales = salesAnalytics.data.reduce((acc, order) => {
+            const month = order.createdAt.getMonth();
+            acc[month] = acc[month] || { total: 0, count: 0 };
+            acc[month].total += order.totalAmount;
+            acc[month].count++;
+            return acc;
+        }, {});
+
+        console.log('Monthly Sales Analysis:', monthlySales);
+
+        // Example 2: Product Performance Analysis
+        console.log('\n--- Example 2: Product Performance Analysis ---');
+        const productAnalytics = await query.graph({
+            entity: 'Order',
+            filters: {
+                status: 'completed'
+            }
+        });
+
+        // Process product data
+        const productPerformance = productAnalytics.data.reduce((acc, order) => {
+            order.products.forEach(product => {
+                if (!acc[product.productId]) {
+                    acc[product.productId] = {
+                        name: product.name,
+                        totalQuantity: 0,
+                        totalRevenue: 0,
+                        orderCount: 0
+                    };
                 }
-            ])
-            .execute();
+                acc[product.productId].totalQuantity += product.quantity;
+                acc[product.productId].totalRevenue += product.quantity * product.price;
+                acc[product.productId].orderCount++;
+            });
+            return acc;
+        }, {});
 
-        console.log('Daily sales trend:', trendResults);
+        console.log('Product Performance:', productPerformance);
 
-        // Example 4: Customer segmentation
-        console.log('\nExample 4: Customer order frequency');
-        const customerSegments = new QueryBuilder(Order, {});
+        // Example 3: Customer Segmentation
+        console.log('\n--- Example 3: Customer Segmentation ---');
+        const customerAnalytics = await query.graph({
+            entity: 'Order',
+            filters: {
+                status: 'completed'
+            }
+        });
 
-        const segmentResults = await customerSegments
-            .aggregate([
-                {
-                    $group: {
-                        _id: '$userId',
-                        orderCount: { $sum: 1 },
-                        totalSpent: { $sum: '$totalAmount' },
-                        firstOrder: { $min: '$createdAt' },
-                        lastOrder: { $max: '$createdAt' }
-                    }
-                },
-                {
-                    $addFields: {
-                        daysSinceLastOrder: {
-                            $dateDiff: {
-                                startDate: '$lastOrder',
-                                endDate: '$$NOW',
-                                unit: 'day'
-                            }
-                        },
-                        averageOrderValue: {
-                            $divide: ['$totalSpent', '$orderCount']
-                        }
-                    }
-                },
-                {
-                    $bucket: {
-                        groupBy: '$orderCount',
-                        boundaries: [1, 3, 5, 10, 20],
-                        default: '20+',
-                        output: {
-                            count: { $sum: 1 },
-                            avgSpent: { $avg: '$totalSpent' },
-                            customers: { $push: '$_id' }
-                        }
-                    }
-                }
-            ])
-            .execute();
+        // Process customer data
+        const customerSegmentation = customerAnalytics.data.reduce((acc, order) => {
+            if (!acc[order.customerId]) {
+                acc[order.customerId] = {
+                    totalSpent: 0,
+                    orderCount: 0,
+                    averageOrderValue: 0
+                };
+            }
+            acc[order.customerId].totalSpent += order.totalAmount;
+            acc[order.customerId].orderCount++;
+            acc[order.customerId].averageOrderValue = 
+                acc[order.customerId].totalSpent / acc[order.customerId].orderCount;
+            return acc;
+        }, {});
 
-        console.log('Customer segments by order frequency:', segmentResults);
+        // Categorize customers
+        const segmentedCustomers = Object.entries(customerSegmentation).reduce((acc, [customerId, data]) => {
+            let segment;
+            if (data.totalSpent > 1000) {
+                segment = 'premium';
+            } else if (data.totalSpent > 500) {
+                segment = 'regular';
+            } else {
+                segment = 'basic';
+            }
+            
+            acc[segment] = acc[segment] || [];
+            acc[segment].push({ customerId, ...data });
+            return acc;
+        }, {});
+
+        console.log('Customer Segmentation:', segmentedCustomers);
+
+        // Example 4: Order Status Distribution
+        console.log('\n--- Example 4: Order Status Distribution ---');
+        const statusAnalytics = await query.graph({
+            entity: 'Order'
+        });
+
+        const statusDistribution = statusAnalytics.data.reduce((acc, order) => {
+            acc[order.status] = (acc[order.status] || 0) + 1;
+            return acc;
+        }, {});
+
+        console.log('Order Status Distribution:', statusDistribution);
 
     } catch (error) {
         console.error('Error:', error);
@@ -187,4 +141,5 @@ async function runAggregationExamples() {
     }
 }
 
-runAggregationExamples();
+// Run the demonstration
+demonstrateAggregateQueries().catch(console.error);
