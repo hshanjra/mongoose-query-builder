@@ -4,6 +4,7 @@ import mongoose, {
   Query,
   FilterQuery,
   HydratedDocument,
+  Connection,
 } from "mongoose";
 import { QueryOptions } from "./types";
 import { QueryResponse } from "./types/query-response";
@@ -14,7 +15,11 @@ import {
 } from "./operators";
 
 export class QueryBuilder {
-  constructor() {}
+  private connection: Connection | null = null;
+
+  constructor(connection?: Connection) {
+    this.connection = connection || null;
+  }
 
   /**
    * Execute a query using the provided configuration
@@ -22,7 +27,7 @@ export class QueryBuilder {
    * @returns Promise resolving to the query results with data and metadata
    */
   public async graph<D extends Document = any>(config: {
-    entity: string;
+    entity: string | Model<D>;
     fields?: QueryOptions["select"];
     filters?: Record<string, any>;
     pagination?: QueryOptions["pagination"];
@@ -33,14 +38,32 @@ export class QueryBuilder {
     restrictedFields?: string[];
     [key: string]: any;
   }): Promise<{ data: D[]; metadata: QueryResponse<D>["meta"] }> {
-    const { entity: modelName, ...queryConfig } = config;
+    const { entity, ...queryConfig } = config;
 
-    // Get the model from the connection
-    const model = mongoose.model<D>(modelName);
+    // Get the model from the connection or use the provided model directly
+    let model: Model<D>;
 
-    if (!model) {
-      throw new Error(`Model "${modelName}" not found. Make sure the model is registered  with mongoose
-      `);
+    if (typeof entity === "string") {
+      try {
+        // Try to get the model from the provided connection first
+        if (this.connection) {
+          model = this.connection.model<D>(entity);
+        } else {
+          // Fall back to global mongoose
+          model = mongoose.model<D>(entity);
+        }
+      } catch (error) {
+        throw new Error(
+          `Model "${entity}" not found. Make sure the model is registered with mongoose before using it with QueryBuilder.`
+        );
+      }
+    } else if (entity && typeof entity === "object" && "find" in entity) {
+      // User directly passed a model instance
+      model = entity as Model<D>;
+    } else {
+      throw new Error(
+        "Invalid entity provided. Please provide either a model name string or a Mongoose Model instance."
+      );
     }
 
     // Start timing execution
