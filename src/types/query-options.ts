@@ -1,108 +1,114 @@
-import { FilterQuery } from 'mongoose';
+import { FilterQuery } from "mongoose";
 
 export interface FullTextSearchOptions {
-    /**
-     * The text to search for in text indices
-     */
-    searchText: string;
-    
-    /**
-     * Override the default language for text search
-     */
-    language?: string;
-    
-    /**
-     * Whether the text search should be case sensitive
-     * Default: false
-     */
-    caseSensitive?: boolean;
-    
-    /**
-     * Whether the text search should be diacritic sensitive
-     * Default: false
-     */
-    diacriticSensitive?: boolean;
-    
-    /**
-     * Whether to sort results by text search relevance score
-     * Default: false
-     */
-    sortByScore?: boolean;
+  /**
+   * The text to search for in text indices
+   */
+  searchText: string;
+
+  /**
+   * Override the default language for text search
+   */
+  language?: string;
+
+  /**
+   * Whether the text search should be case sensitive
+   * Default: false
+   */
+  caseSensitive?: boolean;
+
+  /**
+   * Whether the text search should be diacritic sensitive
+   * Default: false
+   */
+  diacriticSensitive?: boolean;
+
+  /**
+   * Whether to sort results by text search relevance score
+   * Default: false
+   */
+  sortByScore?: boolean;
 }
 
 export interface QueryOptions {
-    /**
-     * Query filters
-     * Supports both direct browser query params and programmatic filters
-     */
-    filters?: Record<string, any>;
-    
-    /**
-     * Default filters that are always applied regardless of user filters
-     */
-    defaultFilters?: Record<string, any>;
-    
-    /**
-     * Sorting configuration
-     * Supports both string format (createdAt:desc) and object format
-     */
-    sort?: string | string[] | Array<{ field: string; order: 'asc' | 'desc' }>;
-    sorting?: Array<{ field: string; order: 'asc' | 'desc' }>;
+  /**
+   * Query filters
+   * Supports both direct browser query params and programmatic filters
+   */
+  filters?: Record<string, any>;
 
-    /**
-     * Pagination options
-     * Supports both offset/limit and cursor-based pagination
-     */
-    pagination?: {
-        page: number;
-        limit: number;
-        offset?: number;
-        cursor?: string;
-    };
+  /**
+   * Default filters that are always applied regardless of user filters
+   */
+  defaultFilters?: Record<string, any>;
 
-    /**
-     * Fields to select
-     * Supports comma-separated string, array, or object format
-     */
-    select?: string | string[] | Record<string, 1 | 0>;
-    selectFields?: string[];
+  /**
+   * Sorting configuration
+   * Supports both string format (createdAt:desc) and object format
+   */
+  sort?: string | string[] | Array<{ field: string; order: "asc" | "desc" }>;
+  sorting?: Array<{ field: string; order: "asc" | "desc" }>;
 
-    /**
-     * Fields to expand/populate
-     * Supports dot notation for nested relations
-     */
-    expand?: string | string[] | Array<{ path: string; select?: string[] }>;
-    populate?: Array<{ path: string; select?: string[] }>;
+  /**
+   * Pagination options
+   * Supports both offset/limit and cursor-based pagination
+   */
+  pagination?: {
+    page?: number;
+    limit?: number;
+    offset?: number;
+    cursor?: string;
+  };
 
-    /**
-     * Fields to exclude from results
-     */
-    excludeFields?: string[];
-    
-    /**
-     * Fields that cannot be queried or selected
-     */
-    restrictedFields?: string[];
-    
-    /**
-     * Full-text search options
-     */
-    fullTextSearch?: FullTextSearchOptions;
+  /**
+   * Fields to select
+   * Supports comma-separated string, array, or object format
+   */
+  select?: string | string[] | Record<string, 1 | 0>;
+  selectFields?: string[];
 
-    /**
-     * Additional query modifiers to be applied
-     */
-    modifiers?: {
-        beforeQuery?: <T>(query: FilterQuery<T>) => Promise<FilterQuery<T>>;
-        afterQuery?: <T>(results: T[]) => Promise<T[]>;
-    };
+  /**
+   * Fields to expand/populate
+   * Supports dot notation for nested relations
+   */
+  expand?: string | string[] | Array<{ path: string; select?: string[] }>;
+  populate?: Array<{ path: string; select?: string[] }>;
+
+  /**
+   * Fields to exclude from results
+   */
+  excludeFields?: string[];
+
+  /**
+   * Fields that cannot be queried or selected
+   */
+  restrictedFields?: string[];
+
+  /**
+   * Full-text search options
+   */
+  fullTextSearch?: FullTextSearchOptions;
+
+  /**
+   * Additional query modifiers to be applied
+   */
+  modifiers?: {
+    beforeQuery?: <T>(query: FilterQuery<T>) => Promise<FilterQuery<T>>;
+    afterQuery?: <T>(results: T[]) => Promise<T[]>;
+  };
 }
 
+/**
+ * Raw query parameters from HTTP requests or other sources
+ */
 export interface QueryParams {
-    filters?: Record<string, any>;
-    sort?: string | string[] | Array<{ field: string; order: 'asc' | 'desc' }>;
-    page?: string;
-    limit?: string;
-    fields?: string;
+  filters?: Record<string, any>;
+  sort?: string | string[] | Array<{ field: string; order: "asc" | "desc" }>;
+  page?: string | number;
+  limit?: string | number;
+  fields?: string | string[];
+  expand?: string | string[] | Array<{ path: string; select?: string[] }>;
+  searchText?: string;
+  searchLanguage?: string;
+  searchScore?: boolean | string;
 }
-

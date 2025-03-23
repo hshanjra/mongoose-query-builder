@@ -1,21 +1,20 @@
 # Mongoose Query Builder
 
-Mongoose Query Builder is a powerful and flexible library little inspired by GraphQL that simplifies complex MongoDB queries in Mongoose. This package provides a clean, intuitive interface for building queries with support for search, filtering, sorting, pagination, population, field selection, and more.
+A powerful and flexible TypeScript-first query builder for Mongoose that simplifies complex MongoDB queries. This package provides a clean, intuitive interface for building queries with support for search, filtering, sorting, pagination, population, field selection, and more.
 
 ## Features
 
-- **Dynamic Model Loading**: Use model names directly without importing models
-- **Search**: Full-text search with score sorting and language support
-- **Filtering**: Rich filtering API with comparison and logical operators
-- **Default Filters**: Enforce constraints on all queries (e.g., only show published items)
-- **Sorting**: Simple sorting by single or multiple fields
-- **Pagination**: Built-in pagination with comprehensive metadata
-- **Population**: Populate related documents with field selection
-- **Field Selection**: Control which fields to include/exclude
-- **Field Removal**: Remove specific fields from results
+- **Dynamic Model Loading**: Use model names directly without importing models for better decoupling
+- **TypeScript Support**: Full type safety with generic types for documents and responses
+- **Full-Text Search**: Built-in text search with score sorting and language support
+- **Rich Filtering**: Comprehensive filtering API with MongoDB-style operators
+- **Default Filters**: Apply global or context-specific filters (great for multi-tenant systems)
+- **Flexible Sorting**: Sort by single or multiple fields with type-safe ordering
+- **Smart Pagination**: Built-in pagination with detailed metadata
+- **Deep Population**: Populate nested relationships with field selection
+- **Field Selection**: Fine-grained control over returned fields
 - **Restricted Fields**: Control which fields can be populated
-- **Framework Support**: Works with Express, NestJS, and vanilla Node.js applications
-- **Direct Model Support**: Pass Mongoose model instances directly for better framework integration
+- **Framework Support**: Works with Express, NestJS, and vanilla Node.js/TypeScript applications
 
 ## Installation
 
@@ -25,19 +24,28 @@ npm install @hshanjra/mongoose-query-builder
 
 ## Basic Usage
 
-```javascript
-const { QueryBuilder } = require("mongoose-query-builder");
+```typescript
+import { QueryBuilder } from "@hshanjra/mongoose-query-builder";
+import { Document } from "mongoose";
+
+// Define your document interface
+interface UserDocument extends Document {
+  name: string;
+  email: string;
+  age: number;
+  status: string;
+}
 
 // Initialize the query builder
 const query = new QueryBuilder();
 
-// Execute a query
-const { data, metadata } = await query.graph({
-  entity: "User", // Model name
-  fields: ["name", "email", "age"], // Fields to select
+// Execute a type-safe query
+const { data, metadata } = await query.graph<UserDocument>({
+  entity: "User", // Use model name string
+  fields: ["name", "email", "age"],
   filters: {
-    age_gte: 18, // Filter: age >= 18
-    status: "active", // Filter: status === 'active'
+    age_gte: 18,
+    status: "active",
   },
   pagination: {
     page: 1,
@@ -54,251 +62,197 @@ console.log("Metadata:", metadata);
 ### Configuration Object
 
 ```typescript
-interface QueryConfig {
-  entity: string; // Required: Mongoose model name
-  fields?: string[]; // Optional: Fields to select
-  filters?: Record<string, any>; // Optional: Query filters
+interface GraphQueryConfig<T extends Document> {
+  // Required: Model name (prefer string over model instance)
+  entity: string;
+
+  // Optional: Fields to select
+  fields?: string[];
+
+  // Optional: Query filters
+  filters?: Record<string, any>;
+
+  // Optional: Pagination configuration
   pagination?: {
     page?: number;
     limit?: number;
+    offset?: number;
+    cursor?: string;
   };
+
+  // Optional: Sort configuration (multiple formats supported)
   sort?:
     | string
     | string[]
-    | {
-        // Optional: Sort configuration
+    | Array<{
         field: string;
         order: "asc" | "desc";
-      }[];
-  expand?: {
-    // Optional: Population configuration
+      }>;
+
+  // Optional: Population/expansion configuration
+  expand?: Array<{
     path: string;
     select?: string[];
-  }[];
+  }>;
+
+  // Optional: Full-text search configuration
   fullTextSearch?: {
-    // Optional: Full-text search
     searchText: string;
     language?: string;
     sortByScore?: boolean;
+    caseSensitive?: boolean;
+    diacriticSensitive?: boolean;
   };
-  defaultFilters?: Record<string, any>; // Optional: Default filters
-  restrictedFields?: string[]; // Optional: Fields to restrict
+
+  // Optional: Default filters (always applied)
+  defaultFilters?: Record<string, any>;
+
+  // Optional: Fields that cannot be queried
+  restrictedFields?: string[];
 }
 ```
 
 ### Filter Operators
 
-Support for MongoDB-style operators with a simpler syntax:
+MongoDB-style operators with a simplified syntax:
 
-- **Comparison**
-
-  - `_eq`: Equal to (default)
-  - `_ne`: Not equal to
-  - `_gt`: Greater than
-  - `_gte`: Greater than or equal to
-  - `_lt`: Less than
-  - `_lte`: Less than or equal to
-  - `_in`: Matches any value in array
-  - `_nin`: Matches none of the values in array
-
-- **Logical**
-
-  - `_and`: Logical AND
-  - `_or`: Logical OR
-  - `_not`: Logical NOT
-
-- **Array**
-  - `_all`: Matches arrays with all elements
-  - `_size`: Matches array size
-  - `_elemMatch`: Matches array elements
-
-Example:
-
-```javascript
-const { data } = await query.graph({
+```typescript
+const { data } = await query.graph<ProductDocument>({
   entity: "Product",
   filters: {
+    // Comparison operators
+    price_gte: 100, // Greater than or equal
+    price_lte: 500, // Less than or equal
+    stock_gt: 0, // Greater than
+    status_ne: "archived", // Not equal
+
+    // Array operators
+    category_in: ["electronics", "gadgets"], // In array
+    tags_all: ["premium", "wireless"], // Contains all
+
+    // Text search operators
+    name_regex: "^iPhone", // Regex match
+    description_text: "wireless", // Text search
+
+    // Logical operators can be combined
     price_gte: 100,
-    price_lte: 500,
-    category_in: ["electronics", "gadgets"],
-    tags_all: ["premium", "wireless"],
+    price_lte: 1000,
+    category: "electronics",
+    tags_in: ["premium", "sale"],
   },
 });
 ```
 
 ### Sorting
 
-Multiple formats supported:
+Multiple formats supported for flexibility:
 
-```javascript
-// String format
-const { data } = await query.graph({
-  entity: "User",
-  sort: "age:desc",
+```typescript
+// String format (simple)
+const { data } = await query.graph<ProductDocument>({
+  entity: "Product",
+  sort: "price:desc",
 });
 
-// Array of strings
-const { data } = await query.graph({
-  entity: "User",
-  sort: ["age:desc", "name:asc"],
+// Multiple sort criteria (string array)
+const { data } = await query.graph<ProductDocument>({
+  entity: "Product",
+  sort: ["price:desc", "name:asc"],
 });
 
-// Object format
-const { data } = await query.graph({
-  entity: "User",
+// Object format (type-safe)
+const { data } = await query.graph<ProductDocument>({
+  entity: "Product",
   sort: [
-    { field: "age", order: "desc" },
+    { field: "price", order: "desc" },
     { field: "name", order: "asc" },
   ],
 });
 ```
 
-### Field Selection
-
-```javascript
-// Array format
-const { data } = await query.graph({
-  entity: "User",
-  fields: ["name", "email", "age"],
-});
-
-// String format (comma-separated)
-const { data } = await query.graph({
-  entity: "User",
-  fields: "name,email,age",
-});
-```
-
 ### Population (Expanding Relations)
 
-```javascript
-const { data } = await query.graph({
-  entity: "Post",
+```typescript
+interface OrderDocument extends Document {
+  items: ProductDocument[];
+  customer: UserDocument;
+  status: string;
+}
+
+const { data } = await query.graph<OrderDocument>({
+  entity: "Order",
   expand: [
     {
-      path: "author",
+      path: "customer",
       select: ["name", "email"],
     },
     {
-      path: "comments",
-      select: ["content", "createdAt"],
+      path: "items",
+      select: ["name", "price", "quantity"],
     },
   ],
+  filters: {
+    status: "completed",
+  },
 });
 ```
 
 ### Full-Text Search
 
-```javascript
-const { data } = await query.graph({
+```typescript
+const { data } = await query.graph<ProductDocument>({
   entity: "Product",
   fullTextSearch: {
     searchText: "wireless headphones",
     language: "english",
     sortByScore: true,
+    caseSensitive: false,
   },
   filters: {
     price_lt: 1000,
+    category: "electronics",
   },
+  sort: [
+    { field: "score", order: "desc" },
+    { field: "price", order: "asc" },
+  ],
 });
 ```
 
 ## Framework Integrations
 
-### Express Integration
-
-```javascript
-const express = require("express");
-const {
-  QueryBuilder,
-  queryBuilderMiddleware,
-} = require("mongoose-query-builder");
-
-const app = express();
-
-// Apply middleware to parse query parameters
-app.use(
-  queryBuilderMiddleware({
-    maxLimit: 50,
-    defaultLimit: 20,
-  })
-);
-
-app.get("/api/products", async (req, res) => {
-  try {
-    const query = new QueryBuilder();
-    const { data, metadata } = await query.graph({
-      entity: "Product",
-      ...req.queryOptions,
-    });
-    res.json({ data, metadata });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-```
-
 ### NestJS Integration
-
-The mongoose-query-builder now supports NestJS's dependency injection system by allowing you to pass Mongoose model instances directly:
 
 ```typescript
 // query-builder.service.ts
 import { Injectable } from "@nestjs/common";
 import { InjectConnection } from "@nestjs/mongoose";
-import { Connection, Model } from "mongoose";
+import { Connection } from "mongoose";
 import { QueryBuilder } from "@hshanjra/mongoose-query-builder";
+import {
+  GraphQueryConfig,
+  GraphQueryResponse,
+} from "@hshanjra/mongoose-query-builder/types";
 
 @Injectable()
 export class QueryBuilderService {
   private queryBuilder: QueryBuilder;
 
   constructor(@InjectConnection() private connection: Connection) {
-    this.queryBuilder = new QueryBuilder();
+    this.queryBuilder = new QueryBuilder(connection);
   }
 
-  async query<T>(
-    model: Model<T>,
-    options: {
-      fields?: string[] | string;
-      filters?: Record<string, any>;
-      pagination?: { page?: number; limit?: number };
-      sort?: string | string[] | { field: string; order: "asc" | "desc" }[];
-      expand?: string | string[] | { path: string; select?: string[] }[];
-      fullTextSearch?: {
-        searchText: string;
-        language?: string;
-        sortByScore?: boolean;
-      };
-      defaultFilters?: Record<string, any>;
-      restrictedFields?: string[];
-    }
-  ) {
-    // Pass the model directly instead of a string name
-    return this.queryBuilder.graph({
-      entity: model,
-      ...options,
-    });
+  async graph<T extends Document>(
+    config: GraphQueryConfig<T>
+  ): Promise<GraphQueryResponse<T>> {
+    return this.queryBuilder.graph<T>(config);
   }
 }
-```
 
-Usage in a NestJS controller:
-
-```typescript
 // product.controller.ts
-import { Controller, Get, Query } from "@nestjs/common";
-import { InjectModel } from "@nestjs/mongoose";
-import { Model } from "mongoose";
-import { Product, ProductDocument } from "./product.schema";
-import { QueryBuilderService } from "./query-builder.service";
-
 @Controller("products")
 export class ProductController {
-  constructor(
-    @InjectModel(Product.name) private productModel: Model<ProductDocument>,
-    private queryBuilderService: QueryBuilderService
-  ) {}
+  constructor(private readonly queryBuilderService: QueryBuilderService) {}
 
   @Get()
   async findAll(
@@ -310,164 +264,97 @@ export class ProductController {
     @Query("expand") expand?: string,
     @Query("search") search?: string
   ) {
-    const parsedFilters = filters ? JSON.parse(filters) : undefined;
-
-    return this.queryBuilderService.query(this.productModel, {
-      fields,
-      filters: parsedFilters,
+    const queryConfig: GraphQueryConfig<ProductDocument> = {
+      entity: "Product",
+      fields: fields?.split(","),
+      filters: filters ? JSON.parse(filters) : undefined,
       pagination: { page, limit },
       sort,
-      expand,
-      ...(search
-        ? {
-            fullTextSearch: {
-              searchText: search,
-              sortByScore: true,
-            },
-          }
-        : {}),
-    });
-  }
-}
-```
-
-## Advanced Examples
-
-### Aggregate Queries
-
-You can use the query builder for more complex data retrieval scenarios:
-
-```javascript
-const { QueryBuilder } = require("@hshanjra/mongoose-query-builder");
-const query = new QueryBuilder();
-
-// Get products with reviews statistics and category details
-const { data, metadata } = await query.graph({
-  entity: "Product",
-  fields: ["name", "price", "description", "averageRating"],
-  expand: [
-    {
-      path: "category",
-      select: ["name", "description"],
-    },
-    {
-      path: "reviews",
-      select: ["rating", "comment"],
-    },
-  ],
-  sort: [
-    { field: "averageRating", order: "desc" },
-    { field: "price", order: "asc" },
-  ],
-  filters: {
-    averageRating_gte: 4.0,
-    price_lte: 1000,
-  },
-  pagination: {
-    page: 1,
-    limit: 10,
-  },
-});
-```
-
-### Default Filters
-
-You can enforce security constraints or ensure data integrity by applying default filters:
-
-```javascript
-// Only show active products to regular users
-const { data } = await query.graph({
-  entity: "Product",
-  filters: {
-    category: "electronics",
-  },
-  defaultFilters: {
-    isActive: true,
-    isDeleted: false,
-  },
-});
-```
-
-### Full Example with Lifecycle
-
-```javascript
-// Enhanced usage example with query lifecycle
-const { QueryBuilder } = require("@hshanjra/mongoose-query-builder");
-
-async function fetchProducts(searchParams) {
-  const query = new QueryBuilder();
-
-  // Prepare query config with user input
-  const queryConfig = {
-    entity: "Product",
-    fields: searchParams.fields || ["name", "price", "description"],
-    filters: {},
-  };
-
-  // Add filters based on user input
-  if (searchParams.minPrice) {
-    queryConfig.filters.price_gte = searchParams.minPrice;
-  }
-
-  if (searchParams.maxPrice) {
-    queryConfig.filters.price_lte = searchParams.maxPrice;
-  }
-
-  if (searchParams.categories && searchParams.categories.length > 0) {
-    queryConfig.filters.category_in = searchParams.categories;
-  }
-
-  // Add search if provided
-  if (searchParams.searchTerm) {
-    queryConfig.fullTextSearch = {
-      searchText: searchParams.searchTerm,
-      sortByScore: true,
+      expand: expand?.split(",").map((path) => ({ path })),
+      ...(search && {
+        fullTextSearch: {
+          searchText: search,
+          sortByScore: true,
+        },
+      }),
     };
+
+    return this.queryBuilderService.graph<ProductDocument>(queryConfig);
   }
-
-  // Add sorting
-  queryConfig.sort = searchParams.sort || "price:asc";
-
-  // Add pagination
-  queryConfig.pagination = {
-    page: searchParams.page || 1,
-    limit: searchParams.limit || 20,
-  };
-
-  // Add security filters (only show active, published products)
-  queryConfig.defaultFilters = {
-    isActive: true,
-    isPublished: true,
-  };
-
-  // Execute query
-  const result = await query.graph(queryConfig);
-
-  return result;
 }
+```
+
+### Express Integration
+
+```typescript
+import express from "express";
+import {
+  QueryBuilder,
+  queryBuilderMiddleware,
+} from "@hshanjra/mongoose-query-builder";
+
+const app = express();
+
+// Apply middleware with configuration
+app.use(
+  queryBuilderMiddleware({
+    maxLimit: 50,
+    defaultLimit: 20,
+    restrictedFields: ["password", "secretKey"],
+  })
+);
+
+app.get("/api/products", async (req, res) => {
+  try {
+    const query = new QueryBuilder();
+    const { data, metadata } = await query.graph<ProductDocument>({
+      entity: "Product",
+      ...req.queryOptions,
+      defaultFilters: {
+        isActive: true,
+        isDeleted: false,
+      },
+    });
+
+    res.json({ data, metadata });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 ```
 
 ## Response Format
 
-```javascript
-{
-    "data": [/* Array of documents matching the query */],
-    "metadata": {
-        "totalCount": 100,        // Total matching documents
-        "currentPage": 1,         // Current page number
-        "pageSize": 10,          // Items per page
-        "totalPages": 10,        // Total number of pages
-        "hasNextPage": true,     // Whether there are more pages
-        "hasPrevPage": false,    // Whether there are previous pages
-        "executionTimeMs": 45,   // Query execution time
-        "query": {               // Original query parameters
-            "filters": {},
-            "sort": {},
-            "pagination": {},
-            "fields": [],
-            "fullTextSearch": {}
-        }
-    }
+```typescript
+interface GraphQueryResponse<T> {
+  // Array of matched documents
+  data: T[];
+
+  // Rich metadata about the query
+  metadata: {
+    totalCount: number; // Total matching documents
+    currentPage: number; // Current page number
+    pageSize: number; // Items per page
+    totalPages: number; // Total number of pages
+    hasNextPage: boolean; // Whether there are more pages
+    hasPrevPage: boolean; // Whether there are previous pages
+    executionTimeMs: number; // Query execution time
+
+    // Original query parameters
+    query?: {
+      filters?: Record<string, any>;
+      sort?: Record<string, string>;
+      pagination?: {
+        page?: number;
+        limit?: number;
+      };
+      fields?: string[];
+      fullTextSearch?: {
+        searchText: string;
+        [key: string]: any;
+      };
+    };
+  };
 }
 ```
 

@@ -3,11 +3,9 @@ import mongoose, {
   Model,
   Query,
   FilterQuery,
-  HydratedDocument,
   Connection,
 } from "mongoose";
-import { QueryOptions } from "./types";
-import { QueryResponse } from "./types/query-response";
+import { QueryOptions, GraphQueryConfig, GraphQueryResponse } from "./types";
 import {
   buildFullTextSearchQuery,
   includeTextScore,
@@ -26,31 +24,22 @@ export class QueryBuilder {
    * @param config Configuration object with entity name and query options
    * @returns Promise resolving to the query results with data and metadata
    */
-  public async graph<D extends Document = any>(config: {
-    entity: string | Model<D>;
-    fields?: QueryOptions["select"];
-    filters?: Record<string, any>;
-    pagination?: QueryOptions["pagination"];
-    sort?: QueryOptions["sort"];
-    expand?: QueryOptions["expand"];
-    fullTextSearch?: QueryOptions["fullTextSearch"];
-    defaultFilters?: Record<string, any>;
-    restrictedFields?: string[];
-    [key: string]: any;
-  }): Promise<{ data: D[]; metadata: QueryResponse<D>["meta"] }> {
+  public async graph<T extends Document>(
+    config: GraphQueryConfig<T>
+  ): Promise<GraphQueryResponse<T>> {
     const { entity, ...queryConfig } = config;
 
     // Get the model from the connection or use the provided model directly
-    let model: Model<D>;
+    let model: Model<T>;
 
     if (typeof entity === "string") {
       try {
         // Try to get the model from the provided connection first
         if (this.connection) {
-          model = this.connection.model<D>(entity);
+          model = this.connection.model<T>(entity);
         } else {
           // Fall back to global mongoose
-          model = mongoose.model<D>(entity);
+          model = mongoose.model<T>(entity);
         }
       } catch (error) {
         throw new Error(
@@ -59,7 +48,7 @@ export class QueryBuilder {
       }
     } else if (entity && typeof entity === "object" && "find" in entity) {
       // User directly passed a model instance
-      model = entity as Model<D>;
+      model = entity as Model<T>;
     } else {
       throw new Error(
         "Invalid entity provided. Please provide either a model name string or a Mongoose Model instance."
@@ -74,7 +63,7 @@ export class QueryBuilder {
 
     // Build and execute the query
     const query = this.buildQuery(model, options);
-    const data = await query.exec();
+    const data = (await query.exec()) as unknown as T[];
 
     // Calculate total count for pagination
     let totalCount = 0;
@@ -106,7 +95,12 @@ export class QueryBuilder {
         query: {
           filters: options.filters,
           sort: this.transformSortingToRecord(options.sorting),
-          pagination: options.pagination,
+          pagination: options.pagination
+            ? {
+                page: options.pagination.page,
+                limit: options.pagination.limit,
+              }
+            : undefined,
           fields: options.selectFields,
           fullTextSearch: options.fullTextSearch,
         },
@@ -116,7 +110,7 @@ export class QueryBuilder {
 
   // Private helper methods
 
-  private normalizeOptions(options: any): QueryOptions {
+  private normalizeOptions(options: Partial<GraphQueryConfig>): QueryOptions {
     const normalized: QueryOptions = {};
 
     // Normalize filters
@@ -151,10 +145,8 @@ export class QueryBuilder {
 
     // Copy other options
     normalized.defaultFilters = options.defaultFilters;
-    normalized.excludeFields = options.excludeFields;
     normalized.restrictedFields = options.restrictedFields;
     normalized.fullTextSearch = options.fullTextSearch;
-    normalized.modifiers = options.modifiers;
 
     return normalized;
   }
@@ -210,18 +202,28 @@ export class QueryBuilder {
     if (typeof sort === "string") {
       return sort.split(",").map((item) => {
         const [field, order = "asc"] = item.split(":");
-        return { field, order: order as "asc" | "desc" };
+        return { field, order: order.toLowerCase() as "asc" | "desc" };
       });
     }
 
     if (Array.isArray(sort)) {
+      if (sort.length === 0) {
+        return [];
+      }
+
       if (typeof sort[0] === "string") {
         return (sort as string[]).map((item) => {
           const [field, order = "asc"] = item.split(":");
-          return { field, order: order as "asc" | "desc" };
+          return { field, order: order.toLowerCase() as "asc" | "desc" };
         });
       }
-      return sort as Array<{ field: string; order: "asc" | "desc" }>;
+
+      return (sort as Array<{ field: string; order: "asc" | "desc" }>).map(
+        (item) => ({
+          field: item.field,
+          order: (item.order || "asc").toLowerCase() as "asc" | "desc",
+        })
+      );
     }
 
     return [];
@@ -253,20 +255,29 @@ export class QueryBuilder {
     }
 
     if (Array.isArray(expand)) {
+      if (expand.length === 0) {
+        return [];
+      }
+
       if (typeof expand[0] === "string") {
         return (expand as string[]).map((path) => ({ path }));
       }
-      return expand as { path: string; select?: string[] }[];
+      return (expand as Array<{ path: string; select?: string[] }>).map(
+        (item) => ({
+          path: item.path,
+          select: item.select,
+        })
+      );
     }
 
     return [];
   }
 
-  private buildQuery<D extends Document>(
-    model: Model<D>,
+  private buildQuery<T extends Document>(
+    model: Model<T>,
     options: QueryOptions
-  ): Query<HydratedDocument<D>[], HydratedDocument<D>> {
-    let query = model.find();
+  ): Query<T[], T> {
+    let query = model.find() as Query<T[], T>;
 
     // Apply filters first
     query = this.applyFilters(model, query, options);
@@ -302,7 +313,7 @@ export class QueryBuilder {
     const populateOpts = options.populate;
     if (populateOpts && populateOpts.length > 0) {
       populateOpts.forEach((opt) => {
-        if (opt.select) {
+        if (opt.select && opt.select.length > 0) {
           // Only use inclusion projection for populated fields
           const projection: Record<string, 1> = {};
           opt.select.forEach((field) => {
@@ -319,12 +330,9 @@ export class QueryBuilder {
           query = query.populate({
             path: opt.path,
             select: projection,
-          }) as unknown as Query<HydratedDocument<D>[], HydratedDocument<D>>;
+          }) as Query<T[], T>;
         } else {
-          query = query.populate(opt.path) as unknown as Query<
-            HydratedDocument<D>[],
-            HydratedDocument<D>
-          >;
+          query = query.populate(opt.path) as Query<T[], T>;
         }
       });
     }
@@ -338,11 +346,11 @@ export class QueryBuilder {
     return query;
   }
 
-  private buildCountQuery<D extends Document>(
-    model: Model<D>,
+  private buildCountQuery<T extends Document>(
+    model: Model<T>,
     options: QueryOptions
-  ): Query<number, HydratedDocument<D>> {
-    let query = model.find();
+  ): Query<number, T> {
+    let query = model.find() as Query<T[], T>;
 
     // Apply filters
     query = this.applyFilters(model, query, options);
@@ -352,16 +360,16 @@ export class QueryBuilder {
       query = this.applyFullTextSearch(query, options.fullTextSearch);
     }
 
-    return query as unknown as Query<number, HydratedDocument<D>>;
+    return query as unknown as Query<number, T>;
   }
 
-  private applyFilters<D extends Document>(
-    model: Model<D>,
-    query: Query<HydratedDocument<D>[], HydratedDocument<D>>,
+  private applyFilters<T extends Document>(
+    model: Model<T>,
+    query: Query<T[], T>,
     options: QueryOptions
-  ): Query<HydratedDocument<D>[], HydratedDocument<D>> {
+  ): Query<T[], T> {
     // Start with empty filter query
-    let filterQuery: FilterQuery<D> = {};
+    let filterQuery: FilterQuery<T> = {};
 
     // Apply default filters if they exist
     if (options.defaultFilters) {
@@ -385,10 +393,10 @@ export class QueryBuilder {
     return query;
   }
 
-  private applyFullTextSearch<D extends Document>(
-    query: Query<HydratedDocument<D>[], HydratedDocument<D>>,
+  private applyFullTextSearch<T extends Document>(
+    query: Query<T[], T>,
     fullTextSearch: NonNullable<QueryOptions["fullTextSearch"]>
-  ): Query<HydratedDocument<D>[], HydratedDocument<D>> {
+  ): Query<T[], T> {
     const {
       searchText,
       language,
@@ -417,16 +425,16 @@ export class QueryBuilder {
   }
 
   // Helper methods for query building
-  private mergeFilterQueries<D>(
-    defaultFilters: FilterQuery<D>,
-    userFilters: FilterQuery<D>
-  ): FilterQuery<D> {
-    const mergedQuery: FilterQuery<D> = { ...defaultFilters };
+  private mergeFilterQueries<T>(
+    defaultFilters: FilterQuery<T>,
+    userFilters: FilterQuery<T>
+  ): FilterQuery<T> {
+    const mergedQuery: FilterQuery<T> = { ...defaultFilters };
 
     // For each user filter
     for (const [field, condition] of Object.entries(userFilters)) {
       // If this field already has a condition from default filters
-      if (mergedQuery[field]) {
+      if (field in mergedQuery) {
         // If either condition is a simple value (not an object with operators)
         if (
           typeof mergedQuery[field] !== "object" ||
@@ -435,7 +443,9 @@ export class QueryBuilder {
           condition === null
         ) {
           // Use $and to combine the conditions
-          mergedQuery.$and = mergedQuery.$and || [];
+          if (!mergedQuery.$and) {
+            mergedQuery.$and = [];
+          }
 
           // Create individual field conditions
           const defaultCondition: Record<string, any> = {};
@@ -448,7 +458,7 @@ export class QueryBuilder {
           mergedQuery.$and.push(defaultCondition, userCondition);
 
           // Remove the original field to avoid duplication
-          delete mergedQuery[field];
+          delete mergedQuery[field as keyof typeof mergedQuery];
         } else {
           // Both conditions are objects with operators, merge them
           (mergedQuery as Record<string, any>)[field] = {

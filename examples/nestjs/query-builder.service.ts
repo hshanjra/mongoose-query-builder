@@ -1,43 +1,24 @@
 import { Injectable } from "@nestjs/common";
-import { InjectModel, InjectConnection } from "@nestjs/mongoose";
-import { Connection, Model } from "mongoose";
-import { QueryBuilder } from "@hshanjra/mongoose-query-builder";
+import { Connection } from "mongoose";
+import { InjectConnection } from "@nestjs/mongoose";
+import { QueryBuilder } from "../../src";
+import { GraphQueryConfig, GraphQueryResponse } from "../../src/types";
 
 @Injectable()
 export class QueryBuilderService {
   private queryBuilder: QueryBuilder;
 
   constructor(@InjectConnection() private connection: Connection) {
-    // Initialize with the NestJS Mongoose connection
     this.queryBuilder = new QueryBuilder(connection);
   }
 
   /**
-   * Execute a query using the provided model and configuration
+   * Execute a query using the provided configuration
    */
-  async query<T>(
-    model: string | Model<T>,
-    options: {
-      fields?: string[] | string;
-      filters?: Record<string, any>;
-      pagination?: { page?: number; limit?: number };
-      sort?: string | string[] | { field: string; order: "asc" | "desc" }[];
-      expand?: string | string[] | { path: string; select?: string[] }[];
-      fullTextSearch?: {
-        searchText: string;
-        language?: string;
-        caseSensitive?: boolean;
-        diacriticSensitive?: boolean;
-        sortByScore?: boolean;
-      };
-      defaultFilters?: Record<string, any>;
-      restrictedFields?: string[];
-    }
-  ) {
-    // Pass the model directly instead of a string name
-    return this.queryBuilder.graph({
-      entity: model,
-      ...options,
-    });
+  async graph<T extends Document>(
+    config: GraphQueryConfig<T>
+  ): Promise<GraphQueryResponse<T>> {
+    // Use model name string instead of model instance
+    return this.queryBuilder.graph<T>(config);
   }
 }
