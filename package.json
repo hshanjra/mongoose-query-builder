@@ -1,6 +1,6 @@
 {
   "name": "@hshanjra/mongoose-query-builder",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A query builder for Mongoose that simplifies handling queries with search, filtering, sorting, pagination, population, and field selection.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -25,7 +25,8 @@
   ],
   "author": "Hanspreet Singh",
   "license": "MIT",
-  "dependencies": {
+  "dependencies": {},
+  "peerDependencies": {
     "mongoose": "^6.0.0"
   },
   "devDependencies": {

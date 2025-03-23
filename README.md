@@ -19,8 +19,10 @@ A powerful and flexible TypeScript-first query builder for Mongoose that simplif
 ## Installation
 
 ```bash
-npm install @hshanjra/mongoose-query-builder
+npm install @hshanjra/mongoose-query-builder mongoose
 ```
+
+> **Note**: This package requires `mongoose` as a peer dependency. You need to install it separately in your project.
 
 ## Basic Usage
 
