@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import mongoose, { Document } from "mongoose";
-import { QueryBuilder, queryBuilderMiddleware } from "../src";
+import { QueryBuilder } from "../src";
+import { QueryBuilderMiddleware } from "../src/middlewares";
 import { GraphQueryConfig } from "../src/types";
 
 // Document interfaces
@@ -265,7 +266,7 @@ const app = express();
 // Configure middleware with route-specific options
 app.use(
   "/api",
-  queryBuilderMiddleware({
+  QueryBuilderMiddleware({
     maxLimit: 50,
     defaultLimit: 20,
     restrictedFields: ["__v"],

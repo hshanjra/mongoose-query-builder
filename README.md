@@ -14,7 +14,9 @@ A powerful and flexible TypeScript-first query builder for Mongoose that simplif
 - **Deep Population**: Populate nested relationships with field selection
 - **Field Selection**: Fine-grained control over returned fields
 - **Restricted Fields**: Control which fields can be populated
+- **Restricted Fields**: Control which fields can be populated
 - **Framework Support**: Works with Express, NestJS, and vanilla Node.js/TypeScript applications
+- **Built-in Middleware**: Built-in express middleware to parse the query from incoming request
 
 ## Installation
 
@@ -290,16 +292,14 @@ export class ProductController {
 
 ```typescript
 import express from "express";
-import {
-  QueryBuilder,
-  queryBuilderMiddleware,
-} from "@hshanjra/mongoose-query-builder";
+import { QueryBuilder } from "@hshanjra/mongoose-query-builder";
+import { QueryBuilderMiddleware } from "@hshanjra/mongoose-query-builder/middlewares";
 
 const app = express();
 
 // Apply middleware with configuration
 app.use(
-  queryBuilderMiddleware({
+  QueryBuilderMiddleware({
     maxLimit: 50,
     defaultLimit: 20,
     restrictedFields: ["password", "secretKey"],
@@ -323,6 +323,201 @@ app.get("/api/products", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+```
+
+## Client-Side Integration
+
+### Making API Requests with URL Parameters
+
+When consuming an API that uses mongoose-query-builder, all query parameters should be passed via URL query strings. Here are examples of how to build proper requests:
+
+#### Axios Example
+
+```typescript
+import axios from "axios";
+
+// Basic query with simple parameters
+async function fetchProducts() {
+  try {
+    // All parameters are passed in URL query string
+    const response = await axios.get("https://api.example.com/api/products", {
+      params: {
+        // Pagination
+        page: 1,
+        limit: 10,
+
+        // Sorting
+        sort: "price:desc",
+
+        // Field selection
+        fields: "name,price,category,description",
+
+        // Simple filtering
+        category: "electronics",
+        price_gte: 100,
+        isActive: true,
+      },
+    });
+
+    const { data, metadata } = response.data;
+    console.log("Products:", data);
+    console.log("Metadata:", metadata);
+
+    return data;
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    throw error;
+  }
+}
+```
+
+#### Handling Array Parameters
+
+For array parameters that need to be sent as multiple parameters with the same key:
+
+```typescript
+// For array parameters like tags_in that should have multiple values
+const fetchProductsWithTags = async () => {
+  try {
+    // Build URL parameters manually for array parameters
+    const params = new URLSearchParams();
+
+    // Add regular parameters
+    params.append("page", "1");
+    params.append("limit", "20");
+    params.append("sort", "createdAt:desc");
+
+    // Add each tag as a separate parameter with the same key
+    // This creates: tags_in=premium&tags_in=wireless&tags_in=bluetooth
+    const tags = ["premium", "wireless", "bluetooth"];
+    tags.forEach((tag) => params.append("tags_in", tag));
+
+    // Make request with explicitly built query string
+    const response = await axios.get(
+      `https://api.example.com/api/products?${params.toString()}`
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error("Error:", error);
+    throw error;
+  }
+};
+```
+
+#### Fetch API Example
+
+```typescript
+// Using native fetch API with URL parameters
+async function fetchProductsWithFetch() {
+  try {
+    // Build the query string explicitly using URLSearchParams
+    const params = new URLSearchParams({
+      page: "1",
+      limit: "10",
+      sort: "createdAt:desc",
+      fields: "name,price,category,image",
+      category: "electronics",
+      price_gte: "100",
+    });
+
+    // Handle array parameters
+    const tags = ["premium", "wireless"];
+    tags.forEach((tag) => params.append("tags_in", tag));
+
+    // Make the fetch request with query string in the URL
+    const response = await fetch(
+      `https://api.example.com/api/products?${params.toString()}`
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! Status: ${response.status}`);
+    }
+
+    const { data, metadata } = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error fetching with fetch:", error);
+    throw error;
+  }
+}
+```
+
+### React Query Integration
+
+For modern React applications, you can integrate with libraries like React Query:
+
+```typescript
+import { useQuery } from "@tanstack/react-query";
+import axios from "axios";
+
+// Define query options interface
+interface ProductQueryOptions {
+  page?: number;
+  limit?: number;
+  sort?: string;
+  category?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  tags?: string[];
+}
+
+// Helper to build URL parameters correctly
+const buildUrlParams = (options: ProductQueryOptions): URLSearchParams => {
+  const params = new URLSearchParams();
+
+  // Add pagination
+  if (options.page) params.append("page", options.page.toString());
+  if (options.limit) params.append("limit", options.limit.toString());
+
+  // Add sorting
+  if (options.sort) params.append("sort", options.sort);
+
+  // Add filters
+  if (options.category) params.append("category", options.category);
+  if (options.minPrice) params.append("price_gte", options.minPrice.toString());
+  if (options.maxPrice) params.append("price_lte", options.maxPrice.toString());
+
+  // Add array parameters
+  if (options.tags && options.tags.length > 0) {
+    options.tags.forEach((tag) => params.append("tags_in", tag));
+  }
+
+  return params;
+};
+
+// Fetch products function
+const fetchProducts = async (options: ProductQueryOptions) => {
+  const params = buildUrlParams(options);
+  const response = await axios.get(
+    `https://api.example.com/api/products?${params.toString()}`
+  );
+  return response.data;
+};
+
+// React Query hook
+export const useProducts = (options: ProductQueryOptions) => {
+  return useQuery({
+    queryKey: ["products", options],
+    queryFn: () => fetchProducts(options),
+    keepPreviousData: true,
+  });
+};
+
+// Using the hook in a component
+function ProductList() {
+  const [queryOptions, setQueryOptions] = useState({
+    page: 1,
+    limit: 10,
+    sort: "price:desc",
+    category: "electronics",
+    minPrice: 100,
+  });
+
+  const { data, isLoading, error } = useProducts(queryOptions);
+
+  // Rest of the component...
+}
 ```
 
 ## Response Format
