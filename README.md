@@ -14,7 +14,6 @@ A powerful and flexible TypeScript-first query builder for Mongoose that simplif
 - **Deep Population**: Populate nested relationships with field selection
 - **Field Selection**: Fine-grained control over returned fields
 - **Restricted Fields**: Control which fields can be populated
-- **Restricted Fields**: Control which fields can be populated
 - **Framework Support**: Works with Express, NestJS, and vanilla Node.js/TypeScript applications
 - **Built-in Middleware**: Built-in express middleware to parse the query from incoming request
 
